@@ -1,0 +1,221 @@
+{{define "catalog"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.CatalogTitle}}</title>
+    <link rel="stylesheet" href="/static/all.min.css">
+    <link rel="stylesheet" href="/static/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/theme-switcher.js"></script>
+</head>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<body>
+    <!-- Модальное окно авторизации -->
+    <div id="auth-overlay" class="auth-overlay">
+        <div class="auth-modal">
+            <h2>Авторизация</h2>
+            <div id="auth-error-message" class="error-message" style="display: none;"></div>
+            <form id="auth-modal-form">
+                <div class="auth-form-group">
+                    <label for="modal-password">Пароль:</label>
+                    <input type="password" id="modal-password" name="password" required>
+                </div>
+                <div class="auth-form-buttons">
+                    <button type="submit" class="auth-login-btn">Войти</button>
+                    <button type="button" id="auth-cancel-btn" class="auth-cancel-btn">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<!-- Модальное окно загрузки книги -->
+<div id="quick-upload-overlay" class="upload-overlay" style="display: none;">
+    <!-- Содержимое модального окна -->
+    <div class="upload-modal"> 
+        <h2>Загрузка книг</h2>
+        <div id="upload-modal-message" class="message"></div>
+        <form id="upload-modal-form" class="upload-form" enctype="multipart/form-data">
+            <div class="upload-form-group">
+                <!--label for="modal-book-file">Файлы книг:</label-->
+                <input type="file" id="modal-book-file" name="book_files" accept=".fb2,.epub,.pdf,.djvu,.fb2.zip" multiple required>
+                <p class="help-text">Форматы файлов: FB2, FB2.ZIP, EPUB, PDF, DJVU<br>
+                   <small>Удерживайте Ctrl для выбора нескольких файлов</small>
+                </p>
+            </div>
+            <div class="upload-form-buttons">
+                <button type="submit" class="upload-submit-btn">
+                    <i class="fas fa-upload"></i> Загрузить
+                </button>
+                <button type="button" id="upload-modal-cancel-btn" class="upload-cancel-btn">
+                    Отмена
+                </button>
+            </div>
+        </form>
+        <div id="upload-modal-progress" class="upload-progress" style="display: none;">
+            <div class="spinner"></div>
+            <p>Загрузка файлов и обработка книг...</p>
+            <div id="upload-progress-info"></div>
+        </div>
+    </div>
+</div>
+<!-- Модальное окно ревизии -->
+<div id="revision-overlay" class="upload-overlay" style="display: none;">
+    <!-- Содержимое будет загружено сюда динамически или вставлено статически -->
+    <!-- Временное статическое содержимое для тестирования -->
+    <div class="upload-modal" id="revision-modal-content">
+        <h2>Полная ревизия библиотеки</h2>
+        <div id="revision-message" class="message"></div>
+        
+        <!-- Прогресс ревизии -->
+        <div id="revision-progress" class="upload-progress" style="display: none;">
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="revision-progress-bar" style="width: 0%"></div>
+            </div>
+            <div class="progress-text" id="revision-progress-text">Подготовка...</div>
+            <div class="spinner"></div>
+        </div>
+        
+        <!-- Форма подтверждения -->
+        <form id="revision-form" class="upload-form">
+            <div class="upload-form-group">
+                <p>Выполнить полную ревизию библиотеки? Это может занять несколько минут.</p>
+                <p>Будут выполнены следующие операции:</p>
+                <ul>
+                    <li>Проверка наличия файлов на диске</li>
+                    <li>Сканирование каталога книг</li>
+                    <li>Очистка неиспользуемых данных</li>
+                    <li>Создание недостающих обложек</li>
+                    <li>Создание недостающих аннотаций</li>
+                    <li>Добавление недостающих ссылок IPFS</li>
+                </ul>
+            </div>
+            <div class="upload-form-buttons">
+                <button type="submit" class="upload-submit-btn">
+                    <i class="fas fa-sync-alt"></i> Выполнить ревизию
+                </button>
+                <button type="button" id="revision-cancel" class="upload-cancel-btn">
+                    Отмена
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+    <div class="header">
+        <div class="logo-container">
+            <a href="/">
+                <img src="/static/turanga.png" alt="Turanga" height="128" title="{{.AppTitle}}">
+            </a>
+        </div>
+        <div class="header-main">
+            <h1>{{.CatalogTitle}}</h1>
+            <form class="search-form" action="/" method="GET">
+                 <input type="text" name="q" class="search-input" placeholder="Поиск по авторам, названиям, сериям и тегам" value="{{.Query}}" title="Введите поисковый запрос">
+                 <button type="submit" class="search-button" title="Искать">
+                     <i class="fas fa-search"></i>
+                 </button>
+            </form>
+        </div>
+        <div class="header-actions">
+            {{if .IsAuthenticated}}
+            <a href="/upload" class="admin-link" title="Добавить книгу">
+                <i class="fas fa-plus"></i>
+            </a>
+            <a href="/request" 
+               class="admin-link {{if or (not .IPFSEnabled) (not .NostrEnabled)}}disabled{{end}}" 
+               title="{{if and .IPFSEnabled .NostrEnabled}}Запросить книгу в Интернете{{else}}Сервисы IPFS/Nostr недоступны{{end}}"
+               {{if or (not .IPFSEnabled) (not .NostrEnabled)}}aria-disabled="true"{{end}}>
+                <i class="fas fa-globe"></i>
+            </a>
+            <button type="button" class="admin-link" href="/revision" title="Полная ревизия библиотеки">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <a href="/logout" class="admin-link" title="Выйти">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+            {{else}}
+            <a href="/auth" class="admin-link" title="Администрирование">
+                <i class="fas fa-sign-in-alt"></i>
+            </a>
+            {{end}}
+            <a href="/feed" class="opds-link" title="OPDS Каталог">
+                <i class="fas fa-rss"></i>
+            </a>
+            <button id="theme-toggle" class="back-link" title="Переключить тему">
+                <i class="fas fa-moon"></i> <!-- Или fa-sun, в зависимости от текущей темы -->
+            </button>
+        </div>
+    </div>
+    <div class="books-grid">
+    {{range .Books}}
+    <div class="book-card-wrapper">
+        <a href="/book/{{.ID}}" class="book-card-link">
+            <div class="book-card-cover">
+                {{if .CoverURL}}
+                <img src="{{.CoverURL}}" alt="Обложка">
+                {{else}}
+                <i class="book-card-placeholder fas fa-book"></i>
+                {{end}}
+                <!-- Тип файла на обложке -->
+                {{if .FileType}}
+                <div class="book-card-filetype">{{.FileType}}</div>
+                {{end}}
+                <!-- Теги на обложке -->
+                {{if .TagsStr}}
+                <div class="book-card-tags">
+                    {{range $index, $tag := split .TagsStr ","}}
+                        {{if lt $index 3}} <!-- Проверяем $index напрямую -->
+                        <span class="book-card-tag" title="{{trim $tag}}">
+                            {{trim $tag}}
+                        </span>
+                        {{end}}
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+            <div class="book-card-info">
+                <div class="book-card-title">{{.Title}}</div>
+                <div class="book-card-author">{{if ne .AuthorsStr "Автор не указан"}}{{.AuthorsStr}}{{else}}Автор не указан{{end}}</div>
+            </div>
+        </a>
+    </div>
+    {{else}}
+    <p class="empty-message">Книги не найдены</p>
+    {{end}}
+</div>
+{{if gt .TotalPages 1}}
+<div style="display: flex; justify-content: center; margin-top: 20px;">
+    <div style="display: flex; gap: 5px;">
+        {{if gt .CurrentPage 1}}
+            <a href="?page={{.PrevPage}}" class="back-link" style="text-decoration: none;">&laquo;</a>
+        {{end}}
+        
+        {{if gt .StartPage 1}}
+            <a href="?page=1" class="back-link" style="text-decoration: none;">1</a>
+            {{if gt .StartPage 2}}<span class="back-link" style="pointer-events: none;">...</span>{{end}}
+        {{end}}
+        
+        {{range .PageNumbers}}
+            {{if eq . $.CurrentPage}}
+                <span class="back-link" style="background-color: #005a87; pointer-events: none;">{{.}}</span>
+            {{else}}
+                <a href="?page={{.}}" class="back-link" style="text-decoration: none;">{{.}}</a>
+            {{end}}
+        {{end}}
+        
+        {{if lt .EndPage .TotalPages}}
+            {{if lt .EndPage (sub $.TotalPages 1)}}<span class="back-link" style="pointer-events: none;">...</span>{{end}}
+            <a href="?page={{.TotalPages}}" class="back-link" style="text-decoration: none;">{{.TotalPages}}</a>
+        {{end}}
+        
+        {{if lt .CurrentPage .TotalPages}}
+            <a href="?page={{.NextPage}}" class="back-link" style="text-decoration: none;">&raquo;</a>
+        {{end}}
+    </div>
+</div>
+{{end}}
+<script src="/static/bootstrap.bundle.min.js"></script>
+<script src="/static/scripts.js"></script>
+</body>
+</html>
+{{end}}

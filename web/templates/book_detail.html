@@ -1,0 +1,284 @@
+<!-- /web/templates/book_detail.html-->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Turanga</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/all.min.css">
+    <script src="/static/theme-switcher.js"></script>
+</head>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<body data-book-id="{{.Book.ID}}" data-file-hash="{{.Book.FileHash}}">
+    <div class="header">
+        {{if .IsAuthenticated}}
+        <button type="button" id="delete-book-btn" class="delete-book-btn" title="Удалить книгу" style="display: none;">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+        {{end}}
+        <h1>{{.Book.Title}}</h1>
+        <div>
+            {{if .IsAuthenticated}}
+            <!-- Форма редактирования названия -->
+            <div class="edit-field-form" style="display: none; margin-bottom: 20px;">
+                <input type="text" class="edit-field-input" value="{{.Book.Title}}" style="width: 600px; margin-right: 10px;">
+                <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <button type="button" class="edit-field-btn" title="Редактировать название" style="display: none;">
+                <i class="fas fa-pencil-alt"></i>
+            </button>
+            <button type="button" id="edit-book-btn" class="admin-link" title="Редактировать книгу">
+                <i class="fas fa-edit"></i>
+            </button>
+            {{end}}
+            <a href="/" class="back-link" title="Показать все книги">
+                <i class="fas fa-home"></i>
+            </a>
+        </div>
+    </div>
+    <div class="book-detail-container">
+        <div class="book-cover-section">
+            <div class="book-cover-container">
+                <!-- Невидимое поле для загрузки файла -->
+                <input type="file" id="cover-upload-input" accept="image/*" style="display: none;">
+                <div class="book-cover">
+                    {{if .Book.CoverURL}}
+                    <img src="{{.Book.CoverURL}}" alt="Обложка">
+                    {{else}}
+                    <i class="book-cover-placeholder fas fa-book"></i>
+                    {{end}}
+                    <!-- Кнопка редактирования обложки (видна только в режиме редактирования) -->
+                    {{if .IsAuthenticated}}
+                    <button type="button" id="edit-cover-btn" class="edit-cover-btn" title="Заменить обложку" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    {{end}}
+                </div>
+            </div>
+            <div class="book-download-section">
+                <!--h3>Скачать</h3-->
+                {{if .Book.Files}}
+                <div class="book-files">
+                {{range .Book.Files}}
+                    <a href="{{.URL}}" class="book-file">
+                        {{upper .Type}}
+                        {{if .FileSize}}
+                        <span class="file-size">({{formatSize .FileSize}})</span>
+                        {{end}}
+                        {{if .FileHash}}
+                        <img src="/identicon/{{.FileHash}}.png" alt="Identicon" class="book-file-identicon" title="#{{.FileHash}}">
+                        {{end}}
+                    </a>
+                    {{if $.Book.IPFS_CID}}
+                    <button type="button" class="book-file ipfs-copy-btn" 
+                            data-cid="{{$.Book.IPFS_CID}}" 
+                            data-filehash="{{$.Book.FileHash}}"
+                            data-filetype="{{$.FileType}}"
+                            title="Копировать IPFS ссылку для скачивания">
+                        <i class="fas fa-cloud-download-alt"></i> IPFS
+                    </button>
+                    {{end}}
+                {{end}}
+                </div>
+                {{else}}
+                <p class="empty-message">Файлы не найдены</p>
+                {{end}}
+            </div>
+        </div>
+        <div class="book-info-section">
+            <div class="book-meta">
+                <!-- Авторы -->
+                <div class="book-meta-item editable-field" data-field="authors" data-value="{{.Book.AuthorsStr}}">
+                    <span class="book-meta-label">Авторы:</span>
+                    {{if ne .Book.AuthorsStr "Автор не указан"}}
+                        <!-- Отображаем авторов как ссылки -->
+                        <span id="authors-display" class="editable-display">
+                            {{range $index, $author := .Authors}}
+                                {{if $index}}, {{end}}
+                                <a href="/author/{{$author.ID}}">{{$author.Name}}</a>
+                            {{end}}
+                        </span>
+                    {{else}}
+                    <span id="authors-display" class="editable-display empty-field" style="display: none;">Не указаны</span>
+                    <span class="empty-placeholder" style="display: none;">Не указаны</span>
+                    {{end}}
+                    <button type="button" class="edit-field-btn" title="Редактировать авторов" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <div class="edit-field-form" style="display: none;">
+                        <input type="text" class="edit-field-input" value="{{.Book.AuthorsStr}}" placeholder="Введите авторов через запятую">
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <!-- Серия -->
+                <div class="book-meta-item editable-field" data-field="series" data-value="{{.Book.Series}}|{{.Book.SeriesNumber}}">
+                    <span class="book-meta-label">Серия:</span>
+                    {{if .Book.Series}}
+                    <!-- Отображаем серию как ссылку -->
+                    <span id="series-display" class="editable-display">
+                        <a href="/s/{{urlquery .Book.Series}}">{{.Book.Series}}</a> {{if .Book.SeriesNumber}}#{{.Book.SeriesNumber}}{{end}}
+                    </span>
+                    {{else}}
+                    <span id="series-display" class="editable-display empty-field" style="display: none;">Не указана</span>
+                    <span class="empty-placeholder" style="display: none;">Не указана</span>
+                    {{end}}
+                    <button type="button" class="edit-field-btn" title="Редактировать серию" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <div class="edit-field-form" style="display: none;">
+                        <input type="text" class="edit-field-input" value="{{.Book.Series}}" placeholder="Название серии" style="flex: 3;">
+                        <input type="text" class="edit-field-input-series-number" value="{{.Book.SeriesNumber}}" placeholder="Номер" style="flex: 1; margin-left: 10px;">
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <!-- Год издания -->
+                <div class="book-meta-item editable-field" data-field="year" data-value="{{.Book.Year}}">
+                    <span class="book-meta-label">Год издания:</span>
+                    {{if .Book.Year}}
+                    <span id="year-display" class="editable-display">{{.Book.Year}}</span>
+                    {{else}}
+                    <span id="year-display" class="editable-display empty-field" style="display: none;">Не указан</span>
+                    <span class="empty-placeholder" style="display: none;">Не указан</span>
+                    {{end}}
+                    <button type="button" class="edit-field-btn" title="Редактировать год" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <div class="edit-field-form" style="display: none;">
+                        <input type="text" class="edit-field-input" value="{{.Book.Year}}" placeholder="Год издания">
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <!-- Издательство -->
+                <div class="book-meta-item editable-field" data-field="publisher" data-value="{{.Book.Publisher}}">
+                    <span class="book-meta-label">Издательство:</span>
+                    {{if .Book.Publisher}}
+                    <span id="publisher-display" class="editable-display">{{.Book.Publisher}}</span>
+                    {{else}}
+                    <span id="publisher-display" class="editable-display empty-field" style="display: none;">Не указано</span>
+                    <span class="empty-placeholder" style="display: none;">Не указано</span>
+                    {{end}}
+                    <button type="button" class="edit-field-btn" title="Редактировать издательство" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <div class="edit-field-form" style="display: none;">
+                        <input type="text" class="edit-field-input" value="{{.Book.Publisher}}" placeholder="Издательство">
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <!-- ISBN -->
+                <div class="book-meta-item editable-field" data-field="isbn" data-value="{{.Book.ISBN}}">
+                    <span class="book-meta-label">ISBN:</span>
+                    {{if .Book.ISBN}}
+                    <span id="isbn-display" class="editable-display">{{.Book.ISBN}}</span>
+                    {{else}}
+                    <span id="isbn-display" class="editable-display empty-field" style="display: none;">Не указан</span>
+                    <span class="empty-placeholder" style="display: none;">Не указан</span>
+                    {{end}}
+                    <button type="button" class="edit-field-btn" title="Редактировать ISBN" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <div class="edit-field-form" style="display: none;">
+                        <input type="text" class="edit-field-input" value="{{.Book.ISBN}}" placeholder="ISBN">
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <!-- 18+ флаг -->
+                <div class="book-meta-item editable-field" data-field="over18" data-value="{{if .Book.Over18}}true{{else}}false{{end}}">
+                    <span class="book-meta-label over18-label" {{if not .Book.Over18}}style="display: none;"{{end}}>Ограничение:</span>
+                    <span id="over18-display" class="editable-display">
+                        {{if .Book.Over18}}
+                        <span class="over18-badge">18+</span>
+                        {{end}}
+                    </span>
+                    {{if .IsAuthenticated}}
+                    <button type="button" class="edit-field-btn" title="Редактировать ограничение" style="display: none;">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <div class="edit-field-form" style="display: none; align-items: center;">
+                        <label style="margin-right: 10px;">
+                            <input type="checkbox" class="edit-field-checkbox" {{if .Book.Over18}}checked{{end}}> 
+                            18+ (только для авторизованных)
+                        </label>
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            <!-- Аннотация -->
+            <div class="book-meta-item editable-field" data-field="annotation" data-value="{{.Book.Annotation}}">
+                {{if .Book.Annotation}}
+                <div id="annotation-display" class="book-annotation editable-display">
+                    <p>{{.Book.Annotation}}</p>
+                </div>
+                {{else}}
+                <div id="annotation-display" class="book-annotation editable-display empty-field" style="display: none;">
+                    <p></p>
+                </div>
+                <div class="book-annotation empty-placeholder" style="display: none;">
+                    <p class="empty-field-text">Аннотация отсутствует</p>
+                </div>
+                {{end}}
+                {{if .IsAuthenticated}}
+                <button type="button" class="edit-field-btn" title="Редактировать аннотацию" style="display: none;">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                <div class="edit-field-form" style="display: none;">
+                    <textarea class="edit-field-textarea" placeholder="Аннотация">{{.Book.Annotation}}</textarea>
+                    <div style="margin-top: 10px;">
+                        <button type="button" class="save-field-btn"><i class="fas fa-check"></i></button>
+                        <button type="button" class="cancel-field-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+<!-- Теги -->
+<div class="tags-section editable-field" data-field="tags" data-value="{{.Book.TagsStr}}">
+    <div class="tags-container"> 
+        <div class="tags-list" id="tags-display">
+            {{if .Book.TagsStr}}
+            {{range split .Book.TagsStr ", "}}
+                {{if .}}
+                <span class="tag">
+                    <a href="/tag/{{urlquery .}}" class="tag-link">{{.}}</a>
+                    {{if $.IsAuthenticated}}
+                    <button type="button" class="tag-remove-btn" data-tag="{{.}}" title="Удалить тег">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    {{end}}
+                </span>
+                {{end}}
+            {{end}}
+            {{else}}
+            <div class="no-tags-placeholder">Теги не указаны</div>
+            {{end}}
+        </div>
+        {{if .IsAuthenticated}}
+        <button type="button" id="add-tag-btn" class="add-tag-btn" title="Добавить тег">
+            <i class="fas fa-plus"></i>
+        </button>
+        {{end}}
+    </div>
+    <!-- Форма добавления тега -->
+    <div id="add-tag-form" class="add-tag-form" style="display: none;">
+        <input type="text" id="new-tag-input" class="new-tag-input" placeholder="Введите тег" maxlength="16">
+        <button type="button" id="save-tag-btn" class="save-tag-btn">
+            <i class="fas fa-check"></i>
+        </button>
+        <button type="button" id="cancel-tag-btn" class="cancel-tag-btn">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+</div>
+        </div>
+    </div>
+    <script src="/static/book-detail-scripts.js"></script>
+</body>
+</html>

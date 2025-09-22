@@ -1,0 +1,1510 @@
+/* web/static/style.css */
+
+/* === ТЕМЫ === */
+:root {
+    --bg-color: #f5f5f5;
+    --text-color: #212529;
+    --header-bg: #f8f9fa;
+    --header-border: #e9ecef;
+    --card-bg: #ffffff;
+    --card-border: #e9ecef;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --link-color: #6c757d;
+    --link-hover-color: #612969;
+    --adm-btn: #8a2be2;
+    --adm-btn-hover: #551591;
+    --serv-btn: #007cba;
+    --serv-btn-hover: #00537c;
+    --btn-text: white;
+    --text-muted: #6c757d;
+    --tag-bg: #fff3cd;
+    --tag-text: #130e01;
+    --tag-border: #ffeaa7;
+    --tag-link-color: #856404;
+    --tag-link-hover: #533f03;
+    --tag-remove-color: #856404;
+    --tag-remove-hover-bg: #f5c6cb;
+    --tag-remove-hover-color: #721c24;
+    --badge-18-bg: #dc3545;
+    --badge-18-text: white;
+    --success-btn: #28a745;
+    --danger-btn: #dc3545;
+    --request-title-color: #005a87;
+    --series-header-color: #2c3e50;
+    --success-color: #4CAF50;
+    --btn-secondary: #6c757d;
+    --success-rgb: 40,167,69;
+}
+
+[data-theme="dark"] {
+    --bg-color: #27272a;
+    --text-color: #d4d4d8;
+    --header-bg: #1e1e1e;
+    --header-border: #333333;
+    --card-bg: #1e1e1e;
+    --card-border: #333333;
+    --input-bg: #2c2c2c;
+    --input-border: #444444;
+    --link-color: #8896a1;
+    --link-hover-color: #c062ff;
+    --adm-btn: #8a2be2;
+    --adm-btn-hover: #551591;
+    --serv-btn: #007cba;
+    --serv-btn-hover: #00537c;
+    --btn-text: white;
+    --text-muted: #6c757d;
+}
+
+/* === УНИВЕРСАЛЬНЫЙ СТИЛЬ ДЛЯ ТЕКСТОВЫХ ССЫЛОК === */
+a {
+    font-weight: bold;
+    font-size: 0.9em;
+    text-decoration: none;
+    color: var(--link-color);
+}
+
+a:hover {
+    color: var(--link-hover-color);
+    text-decoration: none;
+}
+
+/* Исключения для специфических элементов */
+.book-card-link {
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.book-file {
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.tag a, .tag-link {
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: bold;
+    font-size: 24px;
+}
+
+/* === БАЗОВЫЕ СТИЛИ === */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.table {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.table td {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+}
+
+.card {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+/* Для всех полей ввода */
+.search-input,
+.form-group input,
+.new-tag-input,
+.edit-field-input,
+.edit-field-input-series-number,
+.edit-field-textarea,
+.auth-form-group input,
+#request-via-nostr-form input[type="text"],
+.upload-form-group input[type="file"] {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+
+/* Для всех полей ввода Bootstrap */
+.form-control {
+    background-color: var(--input-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--input-border) !important;
+}
+
+.form-control:focus {
+    background-color: var(--input-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--input-border) !important;
+    box-shadow: 0 0 0 0.2rem rgba(138, 43, 226, 0.25) !important;
+}
+
+.form-control::placeholder {
+    color: var(--text-color) !important;
+    opacity: 0.7;
+}
+
+/* === СТИЛИ ПОИСКА === */
+.header-main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    min-width: 0;
+}
+
+.search-form {
+    display: flex;
+    width: 100%;
+    max-width: 500px;
+    margin: 10 auto;
+}
+
+.search-input {
+    flex-grow: 1;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px 0 0 4px;
+    font-size: 16px;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.search-button {
+    background-color: var(--serv-btn);
+    color: var(--btn-text);
+    border: none;
+    border-radius: 0 4px 4px 0;
+    padding: 0 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-button:hover {
+    background-color: var(--serv-btn-hover);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* Адаптивность для поиска */
+@media (max-width: 768px) {
+    .header {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .logo-container {
+        order: 1;
+        flex-basis: content;
+    }
+    .header-main {
+        order: 3;
+        width: 100%;
+    }
+    .search-form {
+        max-width: none;
+        margin: 5px;
+    }
+    .header-actions {
+        order: 2;
+    }
+    .header h1 {
+        font-size: 1.5em;
+        text-align: center;
+        width: 100%;
+    }
+}
+
+/* === ОБЩИЕ КНОПКИ === */
+.back-link, .opds-link, .add-tag-link, .admin-link, .edit-field-btn, .save-field-btn, 
+.cancel-field-btn, .tag-remove-btn, .add-tag-btn, .save-tag-btn, .cancel-tag-btn,
+.delete-book-btn, .auth-button, .cancel-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+/* === КНОПКИ С ФИКСИРОВАННЫМ РАЗМЕРОМ 36x36 === */
+.back-link, .opds-link, .add-tag-link, 
+.save-field-btn, .cancel-field-btn, .save-tag-btn, .cancel-tag-btn {
+    background: var(--serv-btn);
+    color: var(--btn-text);
+    width: 36px;
+    height: 36px;
+    padding: 0;
+}
+
+.back-link:hover, .opds-link:hover, .add-tag-link:hover,
+.save-field-btn:hover, .cancel-field-btn:hover, .save-tag-btn:hover, .cancel-tag-btn:hover {
+    background: var(--serv-btn-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Переопределение цветов для специфических кнопок 36x36 */
+.opds-link {
+    background: #28a745;
+    margin-left: 10px;
+}
+.opds-link:hover {
+    background: #218838;
+}
+
+/* === КНОПКИ АДМИНИСТРИРОВАНИЯ В ЗАГОЛОВКЕ (тоже 36x36) === */
+.admin-link, .edit-field-btn, .delete-book-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin-left: 10px;
+    color: var(--btn-text);
+}
+
+.admin-link {
+    background-color: var(--adm-btn);
+}
+.admin-link:hover {
+    background-color: var(--adm-btn-hover);
+}
+
+.edit-field-btn {
+    background-color: #28a745;
+}
+.edit-field-btn:hover {
+    background-color: #218838;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(40,167,69,0.3);
+}
+
+.delete-book-btn {
+    background-color: #dc3545;
+}
+.delete-book-btn:hover {
+    background-color: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220,53,69,0.3);
+}
+
+/* === ДРУГИЕ КНОПКИ === */
+.tag-remove-btn {
+    background: none;
+    color: var(--tag-remove-color);
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 50%;
+}
+.tag-remove-btn:hover {
+    background-color: var(--tag-remove-hover-bg);
+    color: var(--tag-remove-hover-color);
+}
+
+.add-tag-btn {
+    background-color: #6c757d;
+    color: white;
+    border-radius: 12px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+}
+.add-tag-btn:hover {
+    background-color: #5a6268;
+}
+
+.auth-button, .cancel-button {
+    width: 100%;
+    padding: 12px;
+}
+.auth-button {
+    background-color: var(--adm-btn);
+}
+.auth-button:hover {
+    background-color: var(--adm-btn-hover);
+}
+.cancel-button {
+    background-color: #6c757d;
+}
+.cancel-button:hover {
+    background-color: #5a6268;
+}
+
+/* === ЗАГОЛОВКИ === */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--header-border);
+    min-height: 80px;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 2em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header > div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* === КОНТЕЙНЕРЫ === */
+.book-container, .book-detail-container {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-color);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+@media (min-width: 768px) {
+    .book-container, .book-detail-container { flex-direction: row; }
+}
+
+/* === ОБЛОЖКИ === */
+.book-cover-section {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 200px;
+}
+
+@media (min-width: 768px) {
+    .book-cover-section { border-right: 1px solid #eee; }
+}
+
+.book-cover {
+    width: 100%;
+    max-width: 200px;
+    aspect-ratio: 2/3;
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.book-cover img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.book-cover-placeholder {
+    color: #999;
+    font-size: 48px;
+}
+
+.book-cover-container {
+    position: relative;
+    width: fit-content;
+    margin-bottom: 20px;
+}
+
+.book-cover {
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    transform-origin: top left;
+}
+
+.book-cover img {
+    height: 300px;
+    width: auto;
+    object-fit: contain;
+    max-width: none;
+    display: block;
+}
+
+.book-cover-placeholder {
+    font-size: 80px;
+    color: #6c757d;
+}
+
+.book-cover.enlarged {
+    position: fixed !important;
+    transform: scale(2);
+    z-index: 1000;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    border-radius: 8px;
+    left: var(--original-left, 0px) !important;
+    top: var(--original-top, 0px) !important;
+    transform-origin: top left;
+    margin: 0 !important;
+}
+
+@media (max-width: 1200px) {
+    .book-cover.enlarged { transform: scale(1.5) !important; }
+}
+
+@media (max-width: 768px) {
+    .book-cover.enlarged {
+        transform: none !important;
+        position: relative !important;
+        box-shadow: none !important;
+        left: auto !important;
+        top: auto !important;
+    }
+    .book-cover { height: 200px; }
+    .book-cover img { height: 200px; }
+}
+
+@media (max-width: 480px) {
+    .book-cover { height: 150px; }
+    .book-cover img { height: 150px; }
+}
+
+/* === СЕКЦИИ === */
+.book-download-section {
+    width: 100%;
+    text-align: center;
+}
+
+.book-download-section h3 {
+    margin-top: 0;
+}
+
+.book-files {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 5px;
+}
+
+.book-file {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: #007cba;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    text-decoration: none;
+    max-width: fit-content;
+    box-sizing: border-box;
+    border: none;
+    cursor: pointer;
+}
+
+.book-file:hover {
+    background: #005a87;
+}
+
+.book-file-identicon {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+.book-info-section {
+    padding: 20px;
+    flex-grow: 1;
+}
+
+.book-info-section h2 {
+    margin-top: 0;
+}
+
+.book-meta {
+    color: var(--text-color);
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+.book-meta-item {
+    margin-bottom: 5px;
+}
+
+.book-meta-label {
+    font-weight: bold;
+}
+
+.book-annotation {
+    color: var(--text-color);
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+/* === ТЕГИ === */
+.tags-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.tag {
+    background-color: var(--tag-bg);
+    color: var(--tag-text);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    border: 1px solid var(--tag-border);
+    text-decoration: none;
+}
+
+.tag-link {
+    color: var(--tag-link-color);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.tag-link:hover {
+    color: var(--tag-link-hover);
+    text-decoration: underline;
+}
+
+.add-tag-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.new-tag-input {
+    padding: 6px 10px;
+    border: 2px solid var(--adm-btn);
+    border-radius: 12px;
+    font-size: 14px;
+    outline: none;
+    flex: 1;
+    max-width: 200px;
+}
+
+.no-tags-placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* === ТЕГИ НА ОБЛОЖКАХ === */
+.book-card-tags {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    align-items: flex-start;
+}
+
+.book-card-tag {
+    background-color: rgba(255, 243, 205, 0.9);
+    color: #856404;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 11px;
+    text-align: left;
+    border: 1px solid rgba(255, 234, 167, 0.8);
+    white-space: nowrap;
+    display: inline-block;
+    width: fit-content;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.book-card-filetype {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    background-color: #e0e0e0;
+    color: #333;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    z-index: 2;
+}
+
+/* === КАРТОЧКИ КНИГ === */
+.books-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(167px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.book-card-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.book-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.book-card-cover {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+    overflow: hidden;
+    flex: 1;
+}
+
+.book-card-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.book-card-placeholder {
+    font-size: 3em;
+    color: #6c757d;
+}
+
+.book-card-info {
+    padding: 10px 0 5px 0;
+    flex: 0 0 auto;
+}
+
+.book-card-title {
+    font-weight: bold;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.book-card-author {
+    font-size: 0.8em;
+    color: #6c757d;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* === ФОРМЫ === */
+.auth-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 20px;
+}
+
+.auth-form {
+    background: var(--header-bg);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.auth-form h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.edit-field-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.edit-field-input, .edit-field-input-series-number, .edit-field-textarea {
+    padding: 8px 12px;
+    border: 2px solid var(--adm-btn);
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+}
+
+.edit-field-input, .edit-field-input-series-number {
+    flex: 1;
+    min-width: 200px;
+}
+
+.edit-field-textarea {
+    width: 100%;
+    min-height: 200px;
+    resize: vertical;
+}
+
+/* === РЕЖИМ РЕДАКТИРОВАНИЯ === */
+.editable-field {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.editable-field:hover .edit-field-btn {
+    display: inline-flex;
+}
+
+.edit-mode-only {
+    display: none;
+}
+
+.empty-placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+    display: none;
+}
+
+.empty-field-text {
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0;
+}
+
+#edit-book-btn .fa-times {
+    color: #dc3545;
+}
+
+#edit-book-btn:hover .fa-times {
+    color: #a71e2a;
+}
+
+#edit-book-btn.edit-mode {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+#edit-book-btn.edit-mode:hover {
+    background-color: #e0a800;
+}
+
+#edit-book-btn.edit-mode .fa-times {
+    color: #212529;
+}
+
+/* === СПЕЦИАЛЬНЫЕ ЭЛЕМЕНТЫ === */
+.over18-badge {
+    background-color: var(--badge-18-bg);
+    color: var(--badge-18-text);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.no-restriction-text {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* === СООБЩЕНИЯ === */
+.empty-message {
+    color: #888;
+    font-style: italic;
+}
+
+.error-message {
+    color: #dc3545;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.success-message {
+    color: #155724;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+/* === АДАПТИВНОСТЬ === */
+@media (max-width: 768px) {
+    .books-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 15px;
+        padding: 15px;
+    }
+    
+    .book-card-tags {
+        padding: 4px;
+    }
+    
+    .book-card-tag {
+        font-size: 10px;
+        padding: 1px 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .books-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+        padding: 10px;
+    }
+    
+    .book-card-tags {
+        padding: 2px;
+    }
+    
+    .book-card-tag {
+        font-size: 9px;
+        padding: 1px 3px;
+    }
+}
+
+/* === МОДАЛЬНЫЕ ОКНА === */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+    background-color: var(--bg-color);
+    margin: 10% auto;
+    padding: 25px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+    animation-name: animatetop;
+    animation-duration: 0.3s;
+}
+
+@keyframes animatetop {
+    from {top: -300px; opacity: 0}
+    to {top: 0; opacity: 1}
+}
+
+.modal-content .close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.modal-content .close:hover,
+.modal-content .close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#request-via-nostr-form label {
+    display: block;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+#request-via-nostr-form input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+#request-via-nostr-form input[type="text"]:focus {
+    border-color: var(--success-color);
+    outline: none;
+}
+
+.form-buttons {
+    margin-top: 20px;
+    text-align: right;
+}
+
+#request-via-nostr-form button {
+    padding: 10px 20px;
+    margin-left: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#request-via-nostr-form button[type="submit"] {
+    background-color: var(--success-btn);
+    color: white;
+}
+
+#request-via-nostr-form button[type="submit"]:hover {
+    background-color: #45a049;
+}
+
+#request-via-nostr-form button[type="button"]#cancel-request-btn {
+    background-color: var(--danger-btn);
+    color: white;
+}
+
+#request-via-nostr-form button[type="button"]#cancel-request-btn:hover {
+    background-color: #da190b;
+}
+
+#request-status-message.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+#request-status-message.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.required {
+    color: red;
+}
+
+/* === СТИЛИ ДЛЯ СТРАНИЦЫ ЗАПРОСОВ NOSTR === */
+.request-header {
+    background-color: var(--header-bg);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.request-title {
+    color: var(--request-title-color);
+    font-weight: 500;
+}
+
+.series-header {
+    color: var(--series-header-color);
+    border-bottom: 1px solid var(--header-border);
+    padding-bottom: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.book-table th {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.no-responses {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 2rem;
+}
+
+.btn-sm {
+    margin: 0.1rem;
+}
+
+.badge-local {
+    font-size: 0.75em;
+}
+
+.identicon-small {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.identicon-downloaded {
+    border: 2px solid #28a745 !important;
+    border-radius: 4px;
+}
+
+/* Стили для кнопки копирования IPFS */
+.ipfs-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 12px;
+    background-color: var(--btn-secondary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-top: 5px;
+}
+
+.ipfs-copy-btn:hover {
+    background-color: #5a6268;
+}
+
+.ipfs-copy-btn.copied {
+    background-color: var(--success-btn);
+}
+
+.tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 0;
+}
+
+.edit-cover-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(var(--success-rgb), 0.7);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.3s ease, background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.edit-cover-btn:hover {
+    background-color: rgba(33, 136, 56, 0.9);
+    opacity: 1 !important;
+}
+
+.book-cover-container:hover .edit-cover-btn,
+.book-cover-container.edit-mode .edit-cover-btn {
+    opacity: 1;
+}
+
+.auth-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.auth-modal {
+    position: absolute;
+    top: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--bg-color);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from {opacity: 0; transform: translate(-50%, -20%);}
+    to {opacity: 1; transform: translate(-50%, 10%);}
+}
+
+.auth-modal h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.auth-form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.auth-form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+
+.auth-form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--header-border);
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.auth-form-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.auth-form-buttons button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.auth-login-btn {
+    background-color: #007cba;
+    color: white;
+}
+
+.auth-login-btn:hover {
+    background-color: #005a87;
+}
+
+.auth-cancel-btn {
+    background-color: #6c757d;
+    color: white;
+}
+
+.auth-cancel-btn:hover {
+    background-color: #5a6268;
+}
+
+.auth-modal .error-message {
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.upload-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.upload-modal {
+    position: absolute;
+    top: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--bg-color);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+.upload-modal h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: var(--text-color);
+}
+
+.upload-form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.upload-form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+
+.upload-form-group input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--header-border);
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+    background-color: var(--bg-color);
+}
+
+.upload-form-group .help-text {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-top: 5px;
+    margin-bottom: 0;
+}
+
+.upload-form-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.upload-form-buttons button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.upload-submit-btn {
+    background-color: #28a745;
+    color: white;
+}
+
+.upload-submit-btn:hover {
+    background-color: #218838;
+}
+
+.upload-cancel-btn {
+    background-color: #6c757d;
+    color: white;
+}
+
+.upload-cancel-btn:hover {
+    background-color: #5a6268;
+}
+
+.upload-progress {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.upload-progress .spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: #007cba;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.upload-progress p {
+    margin: 0;
+    color: #007cba;
+    font-weight: bold;
+}
+
+.upload-modal .message {
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+    display: none;
+}
+
+.upload-modal .error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.upload-modal .success-message {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.admin-link.disabled {
+    background-color: #6c757d !important;
+    color: #adb5bd !important;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.admin-link.disabled:hover {
+    background-color: #6c757d !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.warning-message {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 20px;
+    background-color: #f0f0f0;
+    border-radius: 10px;
+    margin: 10px 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #005a87, #00a8ff);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    text-align: center;
+    font-size: 14px;
+    margin: 5px 0;
+    color: #666;
+}
+
+.spinner {
+    margin: 10px auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0, 90, 135, 0.3);
+    border-top: 4px solid #005a87;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* === Bootstrap темизация === */
+[data-theme="dark"] {
+    --bs-table-striped-bg: #2c2c2c;
+    --bs-table-active-bg: #333333;
+    --bs-success: #28a745;
+    --bs-success-rgb: 40,167,69;
+    --bs-primary: #007cba;
+    --bs-primary-rgb: 0,124,186;
+    --bs-danger: #dc3545;
+    --bs-danger-rgb: 220,53,69;
+    --bs-gray-600: #6c757d;
+}
+
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: var(--bs-table-striped-bg) !important;
+}
+
+[data-theme="dark"] .btn-outline-success {
+    color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+[data-theme="dark"] .btn-outline-primary {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+[data-theme="dark"] .text-muted {
+    color: #a0a0a0 !important;
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .card-header {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border-color: var(--card-border);
+}

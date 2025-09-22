@@ -1,0 +1,13 @@
+books/
+covers/
+distr/
+notes/
+blacklist.txt
+go.sum
+turanga
+nibbler
+smelloscope
+*.bak
+*.db
+*.log*
+*.exe

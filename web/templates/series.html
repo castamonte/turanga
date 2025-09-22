@@ -1,0 +1,87 @@
+{{define "series"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.SeriesName}} - Turanga</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/all.min.css">
+    <script src="/static/theme-switcher.js"></script>
+</head>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<body>
+<div class="header">
+    <h1 id="series-name-display">{{.SeriesName}}</h1>
+    <!-- Форма редактирования названия -->
+    <div class="edit-field-form" style="display: none; margin-bottom: 0; margin-top: 10px;">
+        <input type="text" id="series-name-input" value="{{.SeriesName}}" class="edit-field-input" style="width: 300px; margin-right: 10px;">
+        <button type="button" id="save-series-btn" class="save-field-btn"><i class="fas fa-check"></i></button>
+        <!-- Кнопка отмены удалена -->
+    </div>
+    <div>
+        {{if .IsAuthenticated}}
+        <button type="button" id="edit-series-btn" class="admin-link" title="Редактировать серию" data-series-name="{{urlquery .SeriesName}}">
+            <i class="fas fa-edit"></i>
+        </button>
+        {{end}}
+        <a href="/" class="back-link" title="Показать все книги">
+            <i class="fas fa-home"></i>
+        </a>
+    </div>
+</div>
+
+<div class="books-grid">
+    {{range .Books}}
+    <a href="/book/{{.ID}}" class="book-card">
+        <div class="book-card-cover">
+            {{if .CoverURL}}
+            <img src="{{.CoverURL}}" alt="Обложка">
+            {{else}}
+            <i class="book-card-placeholder fas fa-book"></i>
+            {{end}}
+        </div>
+        <div class="book-card-info">
+            <div class="book-card-title">{{.Title}}</div>
+            {{if ne .SeriesNumber ""}}
+            <div class="book-card-series">#{{.SeriesNumber}}</div>
+            {{end}}
+        </div>
+    </a>
+    {{end}}
+</div>
+
+{{if gt .TotalPages 1}}
+<div class="pagination">
+    {{if gt .CurrentPage 1}}
+        <a href="?page={{.PrevPage}}" class="pagination-link">&laquo; Предыдущая</a>
+    {{end}}
+    
+    {{if gt .StartPage 1}}
+        <a href="?page=1" class="pagination-link">1</a>
+        {{if gt .StartPage 2}}<span class="pagination-ellipsis">...</span>{{end}}
+    {{end}}
+    
+    {{range .PageNumbers}}
+        {{if eq . $.CurrentPage}}
+            <span class="pagination-current">{{.}}</span>
+        {{else}}
+            <a href="?page={{.}}" class="pagination-link">{{.}}</a>
+        {{end}}
+    {{end}}
+    
+    {{if lt .EndPage .TotalPages}}
+        {{if lt .EndPage (sub .TotalPages 1)}}<span class="pagination-ellipsis">...</span>{{end}}
+        <a href="?page={{.TotalPages}}" class="pagination-link">{{.TotalPages}}</a>
+    {{end}}
+    
+    {{if lt .CurrentPage .TotalPages}}
+        <a href="?page={{.NextPage}}" class="pagination-link">Следующая &raquo;</a>
+    {{end}}
+</div>
+{{end}}
+
+<script src="/static/series-scripts.js"></script>
+</body>
+</html>
+{{end}}

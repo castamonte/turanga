@@ -1,0 +1,214 @@
+{{define "request"}}
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Запрос книг через Nostr - {{.CatalogTitle}}</title>
+        <link rel="stylesheet" href="/static/all.min.css">
+        <link rel="stylesheet" href="/static/bootstrap.min.css">
+        <link rel="stylesheet" href="/static/style.css">
+        <script src="/static/theme-switcher.js"></script>
+    </head>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<body>
+<div class="header">
+    {{if .ShowResponses}}
+        <!-- Заголовок с информацией о запросе в стиле автора -->
+        {{$requestDesc := ""}}
+        {{if .RequestInfo.Author}}{{$requestDesc = print "Автор: " .RequestInfo.Author}}{{end}}
+        {{if .RequestInfo.Series}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " | Серия: " .RequestInfo.Series}}
+            {{else}}
+                {{$requestDesc = print "Серия: " .RequestInfo.Series}}
+            {{end}}
+        {{end}}
+        {{if .RequestInfo.Title}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " | Название: " .RequestInfo.Title}}
+            {{else}}
+                {{$requestDesc = print "Название: " .RequestInfo.Title}}
+            {{end}}
+        {{end}}
+        {{if .RequestInfo.FileHash}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " | Хеш: " .RequestInfo.FileHash}}
+            {{else}}
+                {{$requestDesc = print "Хеш: " .RequestInfo.FileHash}}
+            {{end}}
+        {{end}}
+        
+        <h1>{{$requestDesc}}</h1>
+        <div>
+            <a href="/" class="back-link" title="Показать все книги">
+                <i class="fas fa-home"></i>
+            </a>
+        </div>
+    {{else}}
+        <h1>Запрос книг через Nostr</h1>
+        <div>
+            <a href="/" class="back-link" title="Показать все книги">
+                <i class="fas fa-home"></i>
+            </a>
+        </div>
+    {{end}}
+</div>
+
+    <div class="container mt-4">
+        {{if .ShowResponses}}
+        <div class="responses-section">
+        <!-- Отображение ответов на активные запросы -->
+        <!-- Заголовок запроса -->
+        {{$requestDesc := ""}}
+        {{if .RequestInfo.Author}}{{$requestDesc = print "Автор = " .RequestInfo.Author}}{{end}}
+        {{if .RequestInfo.Series}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " & Серия = " .RequestInfo.Series}}
+            {{else}}
+                {{$requestDesc = print "Серия = " .RequestInfo.Series}}
+            {{end}}
+        {{end}}
+        {{if .RequestInfo.Title}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " & Название = " .RequestInfo.Title}}
+            {{else}}
+                {{$requestDesc = print "Название = " .RequestInfo.Title}}
+            {{end}}
+        {{end}}
+        {{if .RequestInfo.FileHash}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " & Хеш = " .RequestInfo.FileHash}}
+            {{else}}
+                {{$requestDesc = print "Хеш = " .RequestInfo.FileHash}}
+            {{end}}
+        {{end}}
+        
+        <!--h2>Запрос: {{$requestDesc}}</h2-->
+    
+        {{if .ResponseGroups}}
+            {{range .ResponseGroups}}
+            <div class="mb-4">
+                <h6>Серия: {{.Series}}</h6>
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Авторы</th>
+                                <th>Название</th>
+                                <th>№ в серии</th>
+                                <th>Тип</th>
+                                <th>Размер</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Books}}
+                            <tr>
+                                <td>{{.Authors}}</td>
+                                <td>{{.Title}}</td>
+                                <td>{{.SeriesNumber}}</td>
+                                <td>{{.FileType}}</td>
+                                <td>{{if gt .FileSize 0}}{{formatSize .FileSize}}{{else}}-{{end}}</td>
+                                <td>
+                                    {{if .IsLocal}}
+                                    <!-- Если файл уже локально, показываем галочку с атрибутами для перехода -->
+                                    <!-- Проверяем, что LocalID.Valid=true перед использованием .LocalID.Int64 -->
+                                    {{if .LocalID.Valid}}
+                                    <span class="btn btn-sm btn-outline-success local-book-link" 
+                                          data-book-id="{{.LocalID.Int64}}" 
+                                          title="Есть локально. Кликните, чтобы перейти к книге.">
+                                        <i class="fas fa-check"></i>
+                                    </span>
+                                    {{else}}
+                                    <!-- На случай, если IsLocal=true, но LocalID по какой-то причине не заполнен -->
+                                    <span class="btn btn-sm btn-outline-success" title="Есть локально">
+                                        <i class="fas fa-check"></i>
+                                    </span>
+                                    {{end}}
+                                    {{else if .IPFSCID}}
+                                        <!-- Если файл не локальный, но есть в IPFS, показываем кнопку скачивания -->
+                                        <button type="button" class="btn btn-sm btn-outline-primary ipfs-download-btn" 
+                                            data-filehash="{{.FileHash}}" 
+                                            data-ipfscid="{{.IPFSCID}}" 
+                                            data-filetype="{{.FileType}}" 
+                                            data-title="{{.Title}}"
+                                            title="Скачать через IPFS">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    {{end}}
+                                    {{if .FileHash}}
+                                        <!-- Идентикон с атрибутом data-filehash для копирования -->
+                                        <img src="/identicon/{{.FileHash}}.png"
+                                             alt="Identicon"
+                                             class="identicon-small{{if .IsLocal}} identicon-downloaded{{end}} identicon-copy-btn"
+                                             data-filehash="{{.FileHash}}"
+                                             title="xxHash: {{.FileHash}}. Кликните, чтобы скопировать в буфер обмена.">
+                                    {{end}}
+                                    <!-- Кнопка с черепом для добавления в черный список -->
+                                    <button type="button" class="btn btn-sm btn-outline-danger blacklist-btn"
+                                            data-filehash="{{.FileHash}}"
+                                            data-pubkey="{{.ResponderPubkey}}"
+                                            title="Добавить в черный список книгу и раздающего">
+                                        <i class="fas fa-skull"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+            <p class="text-muted">Пока нет ответов на ваш запрос.</p>
+        {{end}}
+
+        <div class="mt-3">
+            <a href="/request?new=1" class="btn btn-primary">Новый запрос</a>
+        </div>
+
+    {{else}}
+        <!-- Форма для нового запроса -->
+        {{if .Success}}
+        <div class="alert alert-success" role="alert">
+            Запрос успешно отправлен в сеть Nostr!
+        </div>
+        {{end}}
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Отправить запрос книги</h5>
+            </div>
+            <div class="card-body">
+                <form id="nostr-request-form" method="POST" action="/request">
+                    <div class="mb-3">
+                        <label for="author" class="form-label">Автор (фамилия полностью)</label>
+                        <input type="text" class="form-control" id="author" name="author" placeholder="Верн">
+                    </div>
+                    <div class="mb-3">
+                        <label for="series" class="form-label">Серия</label>
+                        <input type="text" class="form-control" id="series" name="series" placeholder="Приключения капитана Гранта">
+                    </div>
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Название книги</label>
+                        <input type="text" class="form-control" id="title" name="title" placeholder="Дети капитана Гранта">
+                    </div>
+                    <div class="mb-3">
+                        <label for="file_hash" class="form-label">xxhash файла</label>
+                        <input type="text" class="form-control" id="file_hash" name="file_hash" placeholder="a1b2c3d4e5f6...">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Отправить запрос</button>
+                </form>
+            </div>
+        </div>
+    {{end}}
+    </div>
+
+    <script src="/static/bootstrap.bundle.min.js"></script>
+    <script src="/static/request-scripts.js"></script>
+
+</body>
+</html>
+{{end}}

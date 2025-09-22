@@ -1,0 +1,39 @@
+{{define "auth"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Авторизация - Turanga</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/all.min.css">
+    <script src="/static/theme-switcher.js"></script>
+</head>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<body>
+    <div class="header">
+        <h1>Авторизация</h1>
+        <div>
+            <a href="/" class="back-link" title="Показать все книги">
+                <i class="fas fa-home"></i>
+            </a>
+        </div>
+    </div>
+    
+    <div class="auth-container">
+        <form method="POST" class="auth-form">
+            <h2>Введите пароль</h2>
+            {{if .ErrorMessage}}
+            <div class="error-message">{{.ErrorMessage}}</div>
+            {{end}}
+            <div class="form-group">
+                <label for="password">Пароль:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="auth-button">Войти</button>
+        </form>
+    </div>
+</body>
+</html>
+{{end}}
+

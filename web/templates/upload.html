@@ -1,0 +1,31 @@
+<!-- web/templates/upload.html -->
+{{define "upload"}}
+    <!-- ВАЖНО: Этот div class="upload-modal" будет вставлен внутрь #quick-upload-overlay -->
+    <div class="upload-modal"> 
+        <h2>Загрузка книг</h2> <!-- Изменил заголовок на "книг" -->
+        <div id="upload-modal-message" class="message"></div>
+        <form id="upload-modal-form" class="upload-form" enctype="multipart/form-data">
+            <div class="upload-form-group">
+                <label for="modal-book-file">Файлы книг:</label> <!-- Изменил label -->
+                <!-- ВАЖНО: Добавил 'multiple' и изменил 'name' на 'book_files[]' для соответствия множественной загрузке -->
+                <input type="file" id="modal-book-file" name="book_files" accept=".fb2,.epub,.pdf,.djvu,.fb2.zip" multiple required>
+                <p class="help-text">Форматы: FB2, EPUB, PDF, DJVU, ZIP (FB2.ZIP)<br>
+                   <small>Удерживайте Ctrl/Cmd для выбора нескольких файлов</small> <!-- Добавил подсказку -->
+                </p>
+            </div>
+            <div class="upload-form-buttons">
+                <button type="submit" class="upload-submit-btn">
+                    <i class="fas fa-upload"></i> Загрузить
+                </button>
+                <button type="button" id="upload-modal-cancel-btn" class="upload-cancel-btn">
+                    Отмена
+                </button>
+            </div>
+        </form>
+        <div id="upload-modal-progress" class="upload-progress" style="display: none;">
+            <div class="spinner"></div>
+            <p>Загрузка файлов и обработка книг...</p> <!-- Обновил текст -->
+            <div id="upload-progress-info"></div> <!-- Добавил контейнер для прогресса по файлам -->
+        </div>
+    </div>
+{{end}}

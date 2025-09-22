@@ -1,0 +1,74 @@
+{{define "tag"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.TagName}} - Turanga</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/all.min.css">
+    <script src="/static/theme-switcher.js"></script>
+</head>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<body>
+    <div class="header">
+        <h1>Тег: {{.TagName}}</h1>
+        <div>
+            <a href="/" class="back-link" title="Показать все книги">
+                <i class="fas fa-home"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="books-grid">
+        {{range .Books}}
+        <div class="book-card-wrapper">
+            <a href="/book/{{.ID}}" class="book-card-link">
+                <div class="book-card-cover">
+                    {{if .CoverURL}}
+                    <img src="{{.CoverURL}}" alt="Обложка">
+                    {{else}}
+                    <i class="book-card-placeholder fas fa-book"></i>
+                    {{end}}
+                </div>
+                <div class="book-card-info">
+                    <div class="book-card-title">{{.Title}}</div>
+                    <div class="book-card-author">{{.AuthorsStr}}</div>
+                </div>
+            </a>
+        </div>
+        {{end}}
+    </div>
+
+    {{if gt .TotalPages 1}}
+    <div class="pagination">
+        {{if gt .CurrentPage 1}}
+            <a href="?page={{.PrevPage}}" class="pagination-link">&laquo; Предыдущая</a>
+        {{end}}
+        
+        {{if gt .StartPage 1}}
+            <a href="?page=1" class="pagination-link">1</a>
+            {{if gt .StartPage 2}}<span class="pagination-ellipsis">...</span>{{end}}
+        {{end}}
+        
+        {{range .PageNumbers}}
+            {{if eq . $.CurrentPage}}
+                <span class="pagination-current">{{.}}</span>
+            {{else}}
+                <a href="?page={{.}}" class="pagination-link">{{.}}</a>
+            {{end}}
+        {{end}}
+        
+        {{if lt .EndPage .TotalPages}}
+            {{if lt .EndPage (sub .TotalPages 1)}}<span class="pagination-ellipsis">...</span>{{end}}
+            <a href="?page={{.TotalPages}}" class="pagination-link">{{.TotalPages}}</a>
+        {{end}}
+        
+        {{if lt .CurrentPage .TotalPages}}
+            <a href="?page={{.NextPage}}" class="pagination-link">Следующая &raquo;</a>
+        {{end}}
+    </div>
+    {{end}}
+</body>
+</html>
+{{end}}
