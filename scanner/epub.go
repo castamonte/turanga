@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"io"
 	"strconv"
 	"strings"
@@ -158,13 +159,15 @@ func ExtractEPUBMetadata(filePath string) (author, title, annotation, isbn, year
 
 	// Извлекаем название
 	if len(pkg.Metadata.Title) > 0 {
-		title = strings.TrimSpace(pkg.Metadata.Title[0])
+		// Декодируем HTML-сущности
+		title = html.UnescapeString(strings.TrimSpace(pkg.Metadata.Title[0]))
 	}
 
 	// Извлекаем авторов с корректным разделением имени и фамилии
 	var authorNames []string
 	for _, creator := range pkg.Metadata.Creators {
-		creatorName := strings.TrimSpace(creator.Text)
+		// Декодируем HTML-сущности
+		creatorName := html.UnescapeString(strings.TrimSpace(creator.Text))
 		if creatorName != "" {
 			firstName := ""
 			lastName := ""
@@ -203,12 +206,14 @@ func ExtractEPUBMetadata(filePath string) (author, title, annotation, isbn, year
 
 	// Извлекаем аннотацию
 	if len(pkg.Metadata.Description) > 0 {
-		annotation = strings.TrimSpace(pkg.Metadata.Description[0].Text)
+		// Декодируем HTML-сущности
+		annotation = html.UnescapeString(strings.TrimSpace(pkg.Metadata.Description[0].Text))
 	}
 
 	// Извлекаем ISBN и другие идентификаторы
 	for _, identifier := range pkg.Metadata.Identifiers {
-		idText := strings.TrimSpace(identifier.Text)
+		// Декодируем HTML-сущности
+		idText := html.UnescapeString(strings.TrimSpace(identifier.Text))
 		// Проверяем атрибут scheme
 		if strings.ToUpper(identifier.Scheme) == "ISBN" {
 			isbn = idText
@@ -252,7 +257,8 @@ func ExtractEPUBMetadata(filePath string) (author, title, annotation, isbn, year
 
 	// Извлекаем год
 	if len(pkg.Metadata.Date) > 0 {
-		dateStr := strings.TrimSpace(pkg.Metadata.Date[0].Text)
+		// Декодируем HTML-сущности
+		dateStr := html.UnescapeString(strings.TrimSpace(pkg.Metadata.Date[0].Text))
 		// Извлекаем только год из даты (например, 2023-01-01 -> 2023)
 		// Простой способ: берем первые 4 символа, если они цифры
 		if len(dateStr) >= 4 {
@@ -265,7 +271,8 @@ func ExtractEPUBMetadata(filePath string) (author, title, annotation, isbn, year
 
 	// Извлекаем издателя
 	if len(pkg.Metadata.Publisher) > 0 {
-		publisher = strings.TrimSpace(pkg.Metadata.Publisher[0].Text)
+		// Декодируем HTML-сущности
+		publisher = html.UnescapeString(strings.TrimSpace(pkg.Metadata.Publisher[0].Text))
 	}
 
 	// Извлекаем серию и номер серии из мета-тегов
@@ -282,11 +289,13 @@ func ExtractEPUBMetadata(filePath string) (author, title, annotation, isbn, year
 	for _, meta := range pkg.Metadata.Meta {
 		// Проверяем атрибуты name/content (Calibre, FBReader и др.)
 		if meta.Name != "" && meta.Content != "" {
+			// Декодируем HTML-сущности в content
+			content := html.UnescapeString(strings.TrimSpace(meta.Content))
 			lowerName := strings.ToLower(meta.Name)
 
 			// Специальная обработка для FB2.book-info.sequence
 			if lowerName == "fb2.book-info.sequence" {
-				content := strings.TrimSpace(meta.Content)
+				// content уже декодирован
 				// Формат: "Название серии; number=9"
 				parts := strings.Split(content, "; number=")
 				if len(parts) >= 1 {
@@ -297,27 +306,29 @@ func ExtractEPUBMetadata(filePath string) (author, title, annotation, isbn, year
 				}
 			} else if strings.Contains(lowerName, "series") && !strings.Contains(lowerName, "index") && !strings.Contains(lowerName, "number") {
 				// Это, вероятно, название серии
-				series = strings.TrimSpace(meta.Content)
+				series = content
 			} else if strings.Contains(lowerName, "series") && (strings.Contains(lowerName, "index") || strings.Contains(lowerName, "number")) {
 				// Это, вероятно, номер серии
-				seriesNumber = strings.TrimSpace(meta.Content)
+				seriesNumber = content
 			}
 			// Также можно проверить просто "series" и "series_index"
 			if lowerName == "series" {
-				series = strings.TrimSpace(meta.Content)
+				series = content
 			} else if lowerName == "series_index" || lowerName == "series-number" {
-				seriesNumber = strings.TrimSpace(meta.Content)
+				seriesNumber = content
 			}
 		}
 		// Проверяем атрибуты property (более современный EPUB 3 способ)
 		if meta.Property != "" && meta.Text != "" {
+			// Декодируем HTML-сущности в text
+			text := html.UnescapeString(strings.TrimSpace(meta.Text))
 			lowerProperty := strings.ToLower(meta.Property)
 			if strings.Contains(lowerProperty, "belongs-to-collection") {
 				// Это, вероятно, название серии
-				series = strings.TrimSpace(meta.Text)
+				series = text
 			} else if strings.Contains(lowerProperty, "group-position") || strings.Contains(lowerProperty, "collection-sequence") {
 				// Это, вероятно, номер серии
-				seriesNumber = strings.TrimSpace(meta.Text)
+				seriesNumber = text
 			}
 		}
 	}

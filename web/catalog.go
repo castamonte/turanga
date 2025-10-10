@@ -22,7 +22,7 @@ import (
 )
 
 // ShowWebInterface обрабатывает запросы к главной странице
-func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request) {
+func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request, cfg *config.Config) {
 
 	var totalBooks int
 	var rows *sql.Rows
@@ -61,19 +61,20 @@ func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request)
 	cleanQuery := strings.TrimSpace(queryStr)
 
 	if queryStr != "" && cleanQuery != "" {
-		searchPattern := "%" + cleanQuery + "%"
+		// Используем lower-версию поискового запроса для поиска
+		lowerQuery := strings.ToLower(cleanQuery)
 
 		// Добавляем логирование для отладки
-		//		log.Printf("Search query: '%s', pattern: '%s'", cleanQuery, searchPattern)
+		//		log.Printf("Search query: '%s', lower query: '%s'", cleanQuery, lowerQuery)
 
-		// Формируем базовую часть WHERE для поиска (оптимизировано для SQLite)
+		// Формируем базовую часть WHERE для поиска с использованием lower-полей
 		searchCondition := `
-		(b.title LIKE ? COLLATE ICU_NOCASE OR
-		 IFNULL(b.series, '') LIKE ? COLLATE ICU_NOCASE OR
+		(b.title_lower LIKE ? OR
+		 IFNULL(b.series_lower, '') LIKE ? OR
 		 EXISTS (
 			SELECT 1 FROM book_authors ba
 			JOIN authors a ON ba.author_id = a.id
-			WHERE ba.book_id = b.id AND a.full_name LIKE ? COLLATE ICU_NOCASE
+			WHERE ba.book_id = b.id AND a.full_name_lower LIKE ?
 		 ) OR
 		 EXISTS (
 			SELECT 1 FROM book_tags bt
@@ -90,13 +91,13 @@ func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request)
 		if isAuthenticated {
 			// Для авторизованных: только условие поиска
 			fullWhereCondition = "WHERE " + searchCondition
-			argsCount = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern}
-			argsSelect = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern}
+			argsCount = []interface{}{"%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + cleanQuery + "%"}
+			argsSelect = []interface{}{"%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + cleanQuery + "%"}
 		} else {
 			// Для неавторизованных: условие поиска И фильтр по over18
 			fullWhereCondition = "WHERE (" + searchCondition + ") AND IFNULL(b.over18, 0) = 0"
-			argsCount = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern}
-			argsSelect = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern}
+			argsCount = []interface{}{"%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + cleanQuery + "%"}
+			argsSelect = []interface{}{"%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + lowerQuery + "%", "%" + cleanQuery + "%"}
 		}
 
 		// Запрос для подсчета общего количества найденных книг
@@ -120,27 +121,29 @@ func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request)
 		// Дополнительная диагностика - проверим отдельно каждое условие поиска
 		if totalBooks == 0 {
 			var titleCount, seriesCount, authorCount, tagCount int
+			searchPatternLower := "%" + lowerQuery + "%"
+			searchPatternOriginal := "%" + cleanQuery + "%"
 
 			// Проверка поиска по названию
-			w.db.QueryRow("SELECT COUNT(*) FROM books WHERE title LIKE ? COLLATE ICU_NOCASE", searchPattern).Scan(&titleCount)
+			w.db.QueryRow("SELECT COUNT(*) FROM books WHERE title_lower LIKE ?", searchPatternLower).Scan(&titleCount)
 			//			log.Printf("Title matches: %d", titleCount)
 
 			// Проверка поиска по серии
-			w.db.QueryRow("SELECT COUNT(*) FROM books WHERE IFNULL(series, '') LIKE ? COLLATE ICU_NOCASE", searchPattern).Scan(&seriesCount)
+			w.db.QueryRow("SELECT COUNT(*) FROM books WHERE IFNULL(series_lower, '') LIKE ?", searchPatternLower).Scan(&seriesCount)
 			//			log.Printf("Series matches: %d", seriesCount)
 
 			// Проверка поиска по авторам
 			w.db.QueryRow(`SELECT COUNT(DISTINCT b.id) FROM books b
 			JOIN book_authors ba ON ba.book_id = b.id
 			JOIN authors a ON ba.author_id = a.id
-			WHERE a.full_name LIKE ? COLLATE ICU_NOCASE`, searchPattern).Scan(&authorCount)
+			WHERE a.full_name_lower LIKE ?`, searchPatternLower).Scan(&authorCount)
 			//			log.Printf("Author matches: %d", authorCount)
 
-			// Проверка поиска по тегам
+			// Проверка поиска по тегам (оставляем COLLATE ICU_NOCASE, т.к. теги не имеют lower-полей)
 			w.db.QueryRow(`SELECT COUNT(DISTINCT b.id) FROM books b
 			JOIN book_tags bt ON bt.book_id = b.id
 			JOIN tags t ON bt.tag_id = t.id
-			WHERE t.name LIKE ? COLLATE ICU_NOCASE`, searchPattern).Scan(&tagCount)
+			WHERE t.name LIKE ? COLLATE ICU_NOCASE`, searchPatternOriginal).Scan(&tagCount)
 			// log.Printf("Tag matches: %d", tagCount)
 
 		}
@@ -272,7 +275,7 @@ func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request)
 		if fileHash.Valid {
 			b.FileHash = fileHash.String
 			// Получаем путь к обложке по хешу
-			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String)
+			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String, w.config)
 		} else {
 			b.CoverURL = ""
 		}
@@ -379,7 +382,9 @@ func (w *WebInterface) ShowWebInterface(wr http.ResponseWriter, r *http.Request)
 		http.Error(wr, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	fmt.Printf("Отображено %d книг на странице %d из %d (Поиск: '%s')\n", len(books), page, totalPages, queryStr)
+	if cfg.Debug {
+		log.Printf("Отображено %d книг на странице %d из %d (Поиск: '%s')\n", len(books), page, totalPages, queryStr)
+	}
 }
 
 // RevisionHandler обрабатывает запрос на полную ревизию библиотеки
@@ -449,9 +454,7 @@ func (w *WebInterface) RevisionHandler(wr http.ResponseWriter, r *http.Request) 
 	// --- АСИНХРОННОЕ ВЫПОЛНЕНИЕ РЕВИЗИИ ---
 	go func() {
 		logPrefix := "[Асинхронная ревизия]"
-		if cfg.Debug {
-			log.Printf("%s Начинаем полную ревизию библиотеки в фоновом режиме...", logPrefix)
-		}
+		log.Printf("%s Начинаем полную ревизию библиотеки в фоновом режиме...", logPrefix)
 
 		// Определяем операции с весами для прогресса
 		operations := []struct {
@@ -459,14 +462,16 @@ func (w *WebInterface) RevisionHandler(wr http.ResponseWriter, r *http.Request) 
 			fn     func() error
 			weight int // вес операции в процентах
 		}{
-			{"Сканирование каталога книг", scanner.ScanBooksDirectory, 25},
-			{"Очистка отсутствующих файлов", scanner.CleanupMissingFiles, 10},
-			{"Очистка неиспользуемых данных", scanner.CleanupOrphanedData, 10},
-			{"Очистка данных Nostr", w.cleanupAllNostrData, 10},
-			{"Переименование книг по конфигурации", scanner.RenameBooksAccordingToConfig, 10},
-			{"Создание недостающих обложек", scanner.GenerateMissingCovers, 15},
-			{"Создание недостающих аннотаций", scanner.GenerateMissingAnnotations, 10},
-			{"Добавление недостающих ссылок IPFS", w.addMissingIPFSLinks, 10},
+			{"Заполнение недостающих полей поиска", scanner.FillMissingLowercaseFields, 2},   // 1. Сначала заполняем пустые поля
+			{"Очистка отсутствующих файлов", scanner.CleanupMissingFiles, 2},                 // 2. Удаляем записи для *отсутствующих* файлов из БД
+			{"Сканирование каталога книг", scanner.ScanBooksDirectory, 76},                   // 3. Находим *новые* файлы, добавляем в БД
+			{"Переименование книг по конфигурации", scanner.RenameBooksAccordingToConfig, 2}, // 4. Переименовываем файлы *и обновляем БД*
+			{"Очистка неиспользуемых данных", scanner.CleanupOrphanedData, 2},                // 5. Удаляем неиспользуемых авторов/тегов (после переименования)
+			{"Очистка данных nostr", w.cleanupAllNostrData, 2},                               // 6. Очистка Nostr
+			{"Создание недостающих обложек", scanner.GenerateMissingCovers, 5},               // 7. Создаём обложки
+			{"Создание недостающих аннотаций", scanner.GenerateMissingAnnotations, 2},        // 8. Создаём аннотации
+			{"Добавление недостающих ссылок IPFS", w.addMissingIPFSLinks, 5},                 // 9. Добавляем IPFS
+			{"Очистка лишних файлов в каталоге", scanner.CleanupExtraFiles, 2},               // 10. Удаляем файлы, не связанные с БД
 		}
 
 		totalWeight := 0
@@ -542,9 +547,17 @@ func (w *WebInterface) addMissingIPFSLinks() error {
 
 	dbConn := w.db
 
-	// Получаем все книги без IPFS CID
+	// --- Шаг 1: Получить все книги без IPFS CID ---
+	// Делаем это в отдельной области видимости, чтобы rows.Close() был вызван как можно раньше.
+	type bookForIPFS struct {
+		id       int
+		fileURL  string // Абсолютный путь к файлу
+		fileHash string
+	}
+	var booksToProcess []bookForIPFS
+
 	if cfg.Debug {
-		log.Println("addMissingIPFSLinks: Выполняю SQL-запрос...")
+		log.Println("addMissingIPFSLinks: Выполняю SQL-запрос для получения списка книг...")
 	}
 	query := `
 		SELECT id, file_url, file_hash
@@ -558,6 +571,8 @@ func (w *WebInterface) addMissingIPFSLinks() error {
 	if err != nil {
 		return fmt.Errorf("ошибка получения списка книг без IPFS CID: %w", err)
 	}
+	// defer rows.Close() гарантирует, что rows будет закрыт при выходе из функции,
+	// даже если будет ошибка или return раньше.
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
 			if cfg.Debug {
@@ -570,55 +585,59 @@ func (w *WebInterface) addMissingIPFSLinks() error {
 		}
 	}()
 
-	if cfg.Debug {
-		log.Println("addMissingIPFSLinks: SQL-запрос выполнен успешно")
-	}
-
-	addedCount := 0
-	errorCount := 0
-	processedCount := 0
-
+	// Читаем все данные из rows как можно быстрее и закрываем rows.
 	for rows.Next() {
-		processedCount++
-		if cfg.Debug {
-			log.Printf("addMissingIPFSLinks: Обрабатываю книгу #%d", processedCount)
-		}
-
-		var bookID int
-		var fileURL, fileHash string
-		err := rows.Scan(&bookID, &fileURL, &fileHash)
+		var b bookForIPFS
+		err := rows.Scan(&b.id, &b.fileURL, &b.fileHash)
 		if err != nil {
 			if cfg.Debug {
 				log.Printf("Ошибка сканирования строки книги: %v", err)
 			}
-			errorCount++
+			// Продолжаем со следующей строкой, не останавливая весь процесс
 			continue
 		}
+		booksToProcess = append(booksToProcess, b)
+	}
+
+	// Проверяем ошибки после итерации
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("ошибка итерации по результатам запроса: %w", err)
+	}
+	// rows.Close() будет вызван здесь неявно через defer
+
+	if cfg.Debug {
+		log.Printf("addMissingIPFSLinks: SQL-запрос выполнен успешно. Найдено %d книг для обработки.", len(booksToProcess))
+	}
+
+	// --- Шаг 2: Обрабатываем каждую книгу ---
+	addedCount := 0
+	errorCount := 0
+	processedCount := 0
+
+	for _, book := range booksToProcess {
+		processedCount++
 		if cfg.Debug {
-			log.Printf("addMissingIPFSLinks: Книга ID=%d, URL=%s, Hash=%s", bookID, fileURL, fileHash)
+			log.Printf("addMissingIPFSLinks: Обрабатываю книгу #%d (ID: %d)", processedCount, book.id)
 		}
 
-		// Преобразуем URL в путь файловой системы
-		relPath := strings.TrimPrefix(fileURL, "/")
-		var filePath string
-		if w.rootPath != "" {
-			// Если задан rootPath, формируем абсолютный путь
-			filePath = filepath.Join(w.rootPath, filepath.FromSlash(relPath))
-		} else {
-			// Если не задан, используем старую логику (для обратной совместимости)
-			filePath = filepath.FromSlash(relPath)
+		if cfg.Debug {
+			log.Printf("addMissingIPFSLinks: Книга ID=%d, URL=%s, Hash=%s", book.id, book.fileURL, book.fileHash)
 		}
+
+		// Используем fileURL напрямую как путь к файлу
+		// fileURL теперь хранит абсолютный путь к файлу
+		filePath := book.fileURL
 
 		// Проверяем существование файла
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			if cfg.Debug {
-				log.Printf("Файл не найден для книги ID %d: %s", bookID, filePath)
+				log.Printf("Файл не найден для книги ID %d: %s", book.id, filePath)
 			}
 			errorCount++
 			continue
 		} else if err != nil {
 			if cfg.Debug {
-				log.Printf("Ошибка проверки файла %s для книги ID %d: %v", filePath, bookID, err)
+				log.Printf("Ошибка проверки файла %s для книги ID %d: %v", filePath, book.id, err)
 			}
 			errorCount++
 			continue
@@ -628,7 +647,7 @@ func (w *WebInterface) addMissingIPFSLinks() error {
 		fileInfo, err := os.Stat(filePath)
 		if err != nil {
 			if cfg.Debug {
-				log.Printf("Ошибка получения информации о файле %s для книги ID %d: %v", filePath, bookID, err)
+				log.Printf("Ошибка получения информации о файле %s для книги ID %d: %v", filePath, book.id, err)
 			}
 			errorCount++
 			continue
@@ -641,7 +660,7 @@ func (w *WebInterface) addMissingIPFSLinks() error {
 		ipfsCID, err := w.addFileToIPFS(filePath, fileInfo)
 		if err != nil {
 			if cfg.Debug {
-				log.Printf("Ошибка загрузки файла %s в IPFS для книги ID %d: %v", filePath, bookID, err)
+				log.Printf("Ошибка загрузки файла %s в IPFS для книги ID %d: %v", filePath, book.id, err)
 			}
 			errorCount++
 			continue // Продолжаем со следующей книгой
@@ -654,66 +673,69 @@ func (w *WebInterface) addMissingIPFSLinks() error {
 			// --- Используем основное соединение dbConn ---
 			// Обновляем запись в БД с повторными попытками при блокировке
 			if cfg.Debug {
-				log.Printf("addMissingIPFSLinks: Обновляю БД для книги ID=%d с CID=%s", bookID, ipfsCID)
+				log.Printf("addMissingIPFSLinks: Обновляю БД для книги ID=%d с CID=%s", book.id, ipfsCID)
 			}
-			// Убираем updateIPFSCIDWithRetry, так как используем то же соединение
-			_, err = dbConn.Exec("UPDATE books SET ipfs_cid = ? WHERE id = ?", ipfsCID, bookID)
+			// ИСПОЛЬЗУЕМ updateIPFSCIDWithRetry
+			err = updateIPFSCIDWithRetry(dbConn, book.id, ipfsCID, 5) // 5 попыток
 			if err != nil {
 				if cfg.Debug {
-					log.Printf("Ошибка обновления IPFS CID для книги ID %d: %v", bookID, err)
+					log.Printf("Ошибка обновления IPFS CID для книги ID %d: %v", book.id, err)
 				}
 				errorCount++
 				continue // Продолжаем со следующей книгой
 			}
 			if cfg.Debug {
-				log.Printf("addMissingIPFSLinks: БД успешно обновлена для книги ID=%d", bookID)
+				log.Printf("addMissingIPFSLinks: БД успешно обновлена для книги ID=%d", book.id)
 			}
 
 			if cfg.Debug {
-				log.Printf("Добавлена ссылка IPFS для книги ID %d: %s -> %s", bookID, filePath, ipfsCID)
+				log.Printf("Добавлена ссылка IPFS для книги ID %d: %s -> %s", book.id, filePath, ipfsCID)
 			}
 			addedCount++
 		} else {
 			if cfg.Debug {
-				log.Printf("CID не был получен для файла %s (книга ID %d), пропускаю обновление БД.", filePath, bookID)
+				log.Printf("CID не был получен для файла %s (книга ID %d), пропускаю обновление БД.", filePath, book.id)
 			}
 		}
 
 		// Небольшая задержка между обработкой книг, чтобы не перегружать IPFS и БД
-		//		log.Printf("addMissingIPFSLinks: Задержка перед следующей итерацией...")
+		// log.Printf("addMissingIPFSLinks: Задержка перед следующей итерацией...")
 		time.Sleep(200 * time.Millisecond)
-	}
-
-	if err = rows.Err(); err != nil {
-		return fmt.Errorf("ошибка итерации по результатам запроса: %w", err)
 	}
 
 	log.Printf("Добавление ссылок IPFS завершено. Обработано: %d, Добавлено: %d, Ошибок: %d", processedCount, addedCount, errorCount)
 
 	// Возвращаем ошибку, если все попытки завершились неудачей (например, проблемы с БД),
 	// но позволяем частичный успех.
-	if processedCount > 0 && addedCount == 0 && errorCount > 0 {
-		return fmt.Errorf("не удалось добавить ни одной ссылки IPFS из %d попыток", errorCount)
-	}
+	// if processedCount > 0 && addedCount == 0 && errorCount > 0 {
+	// 	return fmt.Errorf("не удалось добавить ни одной ссылки IPFS из %d попыток", errorCount)
+	// }
+	// Лучше не возвращать ошибку, если были частичные успехи, чтобы не останавливать всю ревизию.
 	return nil
 }
 
 // updateIPFSCIDWithRetry обновляет IPFS CID в БД с повторными попытками при блокировке
-func (w *WebInterface) updateIPFSCIDWithRetry(db *sql.DB, bookID int, ipfsCID string, maxRetries int) error {
+func updateIPFSCIDWithRetry(database *sql.DB, bookID int, ipfsCID string, maxRetries int) error {
 	cfg := config.GetConfig()
 
+	var lastErr error // Переменная для хранения последней ошибки
+
 	for i := 0; i < maxRetries; i++ {
-		_, err := db.Exec("UPDATE books SET ipfs_cid = ? WHERE id = ?", ipfsCID, bookID)
+		_, err := database.Exec("UPDATE books SET ipfs_cid = ? WHERE id = ?", ipfsCID, bookID)
 		if err == nil {
 			return nil // Успех
 		}
 
+		// Сохраняем последнюю ошибку
+		lastErr = err
+
 		// Проверяем, является ли ошибка блокировкой БД
 		if strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "database locked") {
 			if cfg.Debug {
-				log.Printf("База данных заблокирована, попытка %d/%d для книги ID %d", i+1, maxRetries, bookID)
+				log.Printf("База данных заблокирована, попытка %d/%d для книги ID %d: %v", i+1, maxRetries, bookID, err)
 			}
-			time.Sleep(time.Duration(i+1) * 200 * time.Millisecond) // Увеличивающаяся задержка
+			// Увеличивающаяся задержка перед повторной попыткой
+			time.Sleep(time.Duration(i+1) * 200 * time.Millisecond)
 			continue
 		}
 
@@ -721,7 +743,8 @@ func (w *WebInterface) updateIPFSCIDWithRetry(db *sql.DB, bookID int, ipfsCID st
 		return err
 	}
 
-	return fmt.Errorf("не удалось обновить IPFS CID после %d попыток: database is locked", maxRetries)
+	// Если цикл завершился без успеха, возвращаем последнюю ошибку
+	return fmt.Errorf("не удалось обновить IPFS CID после %d попыток: %v", maxRetries, lastErr)
 }
 
 // Для ревизии библиотеки

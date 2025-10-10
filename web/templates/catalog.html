@@ -152,7 +152,7 @@
         <a href="/book/{{.ID}}" class="book-card-link">
             <div class="book-card-cover">
                 {{if .CoverURL}}
-                <img src="{{.CoverURL}}" alt="Обложка">
+                <img loading="lazy" src="{{.CoverURL}}" alt="Обложка">
                 {{else}}
                 <i class="book-card-placeholder fas fa-book"></i>
                 {{end}}
@@ -187,11 +187,19 @@
 <div style="display: flex; justify-content: center; margin-top: 20px;">
     <div style="display: flex; gap: 5px;">
         {{if gt .CurrentPage 1}}
-            <a href="?page={{.PrevPage}}" class="back-link" style="text-decoration: none;">&laquo;</a>
+            {{if .Query}}
+                <a href="?q={{urlquery .Query}}&page={{.PrevPage}}" class="back-link" style="text-decoration: none;">&laquo;</a>
+            {{else}}
+                <a href="?page={{.PrevPage}}" class="back-link" style="text-decoration: none;">&laquo;</a>
+            {{end}}
         {{end}}
         
         {{if gt .StartPage 1}}
-            <a href="?page=1" class="back-link" style="text-decoration: none;">1</a>
+            {{if .Query}}
+                <a href="?q={{urlquery .Query}}&page=1" class="back-link" style="text-decoration: none;">1</a>
+            {{else}}
+                <a href="?page=1" class="back-link" style="text-decoration: none;">1</a>
+            {{end}}
             {{if gt .StartPage 2}}<span class="back-link" style="pointer-events: none;">...</span>{{end}}
         {{end}}
         
@@ -199,17 +207,29 @@
             {{if eq . $.CurrentPage}}
                 <span class="back-link" style="background-color: #005a87; pointer-events: none;">{{.}}</span>
             {{else}}
-                <a href="?page={{.}}" class="back-link" style="text-decoration: none;">{{.}}</a>
+                {{if $.Query}}
+                    <a href="?q={{urlquery $.Query}}&page={{.}}" class="back-link" style="text-decoration: none;">{{.}}</a>
+                {{else}}
+                    <a href="?page={{.}}" class="back-link" style="text-decoration: none;">{{.}}</a>
+                {{end}}
             {{end}}
         {{end}}
         
         {{if lt .EndPage .TotalPages}}
             {{if lt .EndPage (sub $.TotalPages 1)}}<span class="back-link" style="pointer-events: none;">...</span>{{end}}
-            <a href="?page={{.TotalPages}}" class="back-link" style="text-decoration: none;">{{.TotalPages}}</a>
+            {{if $.Query}}
+                <a href="?q={{urlquery $.Query}}&page={{.TotalPages}}" class="back-link" style="text-decoration: none;">{{.TotalPages}}</a>
+            {{else}}
+                <a href="?page={{.TotalPages}}" class="back-link" style="text-decoration: none;">{{.TotalPages}}</a>
+            {{end}}
         {{end}}
         
         {{if lt .CurrentPage .TotalPages}}
-            <a href="?page={{.NextPage}}" class="back-link" style="text-decoration: none;">&raquo;</a>
+            {{if $.Query}}
+                <a href="?q={{urlquery $.Query}}&page={{.NextPage}}" class="back-link" style="text-decoration: none;">&raquo;</a>
+            {{else}}
+                <a href="?page={{.NextPage}}" class="back-link" style="text-decoration: none;">&raquo;</a>
+            {{end}}
         {{end}}
     </div>
 </div>

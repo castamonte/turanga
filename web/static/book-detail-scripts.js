@@ -563,7 +563,41 @@
             return;
         }
         
-        // Добавляем обработчик увеличения обложки
+        // Обработчик клика по идентикону в шапке ---
+        document.querySelectorAll('.identicon-copy-btn').forEach(img => {
+            img.addEventListener('click', function() {
+                const fileHash = this.getAttribute('data-filehash');
+                if (!fileHash) {
+                    console.warn("FileHash is empty, nothing to copy.");
+                    return;
+                }
+
+                copyToClipboard(fileHash)
+                    .then(() => {
+                        // Визуальная обратная связь
+                        // Можно использовать showCopySuccess, если она есть, или показать всплывающее сообщение
+                        // Проверим, есть ли уже функция showSuccessMessage или похожая
+                        // Если нет, создадим временное сообщение
+                        const originalTitle = this.title;
+                        this.title = 'Скопировано!';
+                        const originalBorder = this.style.border;
+                        this.style.border = '2px solid #28a745'; // Bootstrap success color
+
+                        setTimeout(() => {
+                            this.title = originalTitle;
+                            this.style.border = originalBorder;
+                        }, 2000);
+
+                        //console.log(`FileHash ${fileHash} copied to clipboard.`);
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy FileHash: ', err);
+                        alert(`Не удалось скопировать хеш: ${fileHash}`);
+                    });
+            });
+        });
+
+        // Обработчик увеличения обложки
         const cover = document.querySelector('.book-cover');
         if (cover) {
             cover.addEventListener('mouseenter', function(e) {
@@ -591,7 +625,6 @@
         const titleSaveBtn = titleEditForm ? titleEditForm.querySelector('.save-field-btn') : null;
         const titleCancelBtn = titleEditForm ? titleEditForm.querySelector('.cancel-field-btn') : null;
         
-        // --- Новый код для редактирования обложки ---
         // Обработчик для кнопки редактирования обложки
         const editCoverBtn = document.getElementById('edit-cover-btn');
         const coverUploadInput = document.getElementById('cover-upload-input');
@@ -619,7 +652,6 @@
                 }
             });
         }
-        // --- Конец нового кода для редактирования обложки ---
         
         // Проверка существования editBookBtn
         if (!editBookBtn) {

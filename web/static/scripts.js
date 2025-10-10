@@ -504,7 +504,7 @@ function pollRevisionStatus() {
                         revisionProgressDiv.style.display = 'none';
                     }
                     
-                    // Закрываем модальное окно через 2 секунды
+                    // Закрываем модальное окно через 1 сек
                     setTimeout(() => {
                         //console.log("Закрываем модальное окно ревизии");
                         if (revisionOverlay) {

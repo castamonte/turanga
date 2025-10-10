@@ -19,6 +19,11 @@ func initDB(rootPath string) {
 	// Используем = вместо := чтобы присвоить значение глобальной переменной
 	db, err = sql.Open("sqlite3", dbPath)
 
+	db.SetMaxOpenConns(10) // Установить максимальное количество соединений в пуле
+	db.SetMaxIdleConns(5)  // Установить максимальное количество idle соединений
+	// Установить время жизни соединения (опционально)
+	db.SetConnMaxLifetime(0) // 0 означает бессрочно
+
 	if err != nil {
 		log.Fatalf("Ошибка открытия БД %s: %v", dbPath, err)
 	}
@@ -35,7 +40,9 @@ func initDB(rootPath string) {
         CREATE TABLE IF NOT EXISTS books (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
+            title_lower TEXT,
             series TEXT,
+            series_lower TEXT,
             series_number TEXT,
             published_at TEXT,
             isbn TEXT,
@@ -51,8 +58,9 @@ func initDB(rootPath string) {
         
         CREATE TABLE IF NOT EXISTS authors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            last_name TEXT,        -- Для сортировки и поиска
-            full_name TEXT UNIQUE  -- Для отображения, UNIQUE для предотвращения дубликатов
+            full_name TEXT UNIQUE,  -- Для отображения, UNIQUE для предотвращения дубликатов
+            full_name_lower TEXT,    -- Для поиска
+            last_name_lower TEXT   -- Для сортировки
         );
         
         CREATE TABLE IF NOT EXISTS book_authors (

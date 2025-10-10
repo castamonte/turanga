@@ -30,7 +30,7 @@ type BookFile struct {
 // Author представляет автора книги
 // Используем lastName для сортировки/поиска, fullName для отображения
 type Author struct {
-	LastName string `json:"last_name"`
+	LastName string `json:"last_name_lower"`
 	FullName string `json:"full_name"`
 }
 

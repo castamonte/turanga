@@ -1,3 +1,5 @@
+// opds/books.go
+
 package opds
 
 import (
@@ -61,10 +63,10 @@ func (bh *BookHandler) showBooksLetters(w http.ResponseWriter, r *http.Request) 
 	query := `
         SELECT DISTINCT 
             CASE 
-                WHEN UPPER(SUBSTR(b.title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(b.title, 1, 1))
-                WHEN SUBSTR(b.title, 1, 1) BETWEEN 'А' AND 'Я' THEN SUBSTR(b.title, 1, 1)
-                WHEN SUBSTR(b.title, 1, 1) = 'Ё' THEN 'Ё'
-                ELSE UPPER(SUBSTR(b.title, 1, 1))
+                WHEN SUBSTR(b.title_lower, 1, 1) BETWEEN 'a' AND 'z' THEN SUBSTR(b.title_lower, 1, 1)
+                WHEN SUBSTR(b.title_lower, 1, 1) BETWEEN 'а' AND 'я' THEN SUBSTR(b.title_lower, 1, 1)
+                WHEN SUBSTR(b.title_lower, 1, 1) = 'ё' THEN 'ё'
+                ELSE SUBSTR(b.title_lower, 1, 1)
             END as first_letter, 
             COUNT(*) as book_count
         FROM books b
@@ -72,16 +74,16 @@ func (bh *BookHandler) showBooksLetters(w http.ResponseWriter, r *http.Request) 
           AND (b.over18 IS NULL OR b.over18 = 0)
         GROUP BY 
             CASE 
-                WHEN UPPER(SUBSTR(b.title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(b.title, 1, 1))
-                WHEN SUBSTR(b.title, 1, 1) BETWEEN 'А' AND 'Я' THEN SUBSTR(b.title, 1, 1)
-                WHEN SUBSTR(b.title, 1, 1) = 'Ё' THEN 'Ё'
-                ELSE UPPER(SUBSTR(b.title, 1, 1))
+                WHEN SUBSTR(b.title_lower, 1, 1) BETWEEN 'a' AND 'z' THEN SUBSTR(b.title_lower, 1, 1)
+                WHEN SUBSTR(b.title_lower, 1, 1) BETWEEN 'а' AND 'я' THEN SUBSTR(b.title_lower, 1, 1)
+                WHEN SUBSTR(b.title_lower, 1, 1) = 'ё' THEN 'ё'
+                ELSE SUBSTR(b.title_lower, 1, 1)
             END
         ORDER BY 
             CASE 
-                WHEN first_letter BETWEEN 'A' AND 'Z' THEN 1
-                WHEN first_letter BETWEEN 'А' AND 'Я' THEN 2
-                WHEN first_letter = 'Ё' THEN 3
+                WHEN first_letter BETWEEN 'a' AND 'z' THEN 1
+                WHEN first_letter BETWEEN 'а' AND 'я' THEN 2
+                WHEN first_letter = 'ё' THEN 3
                 ELSE 4
             END,
             first_letter
@@ -131,7 +133,7 @@ func (bh *BookHandler) showAllBooks(w http.ResponseWriter, r *http.Request) {
         FROM books b
         WHERE b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
-        ORDER BY b.title
+        ORDER BY b.title_lower
         LIMIT 1000
     `
 

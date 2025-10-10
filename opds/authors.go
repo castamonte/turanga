@@ -44,7 +44,6 @@ func (ah *AuthorHandler) AuthorsHandler(w http.ResponseWriter, r *http.Request) 
         JOIN book_authors ba ON a.id = ba.author_id
         JOIN books b ON ba.book_id = b.id
         WHERE a.full_name IS NOT NULL AND a.full_name != ''
-          AND a.last_name IS NOT NULL AND a.last_name != ''
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
     `)
@@ -69,31 +68,30 @@ func (ah *AuthorHandler) AuthorsLettersHandler(w http.ResponseWriter, r *http.Re
 	query := `
         SELECT DISTINCT 
             CASE 
-                WHEN UPPER(SUBSTR(a.last_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(a.last_name, 1, 1))
-                WHEN SUBSTR(a.last_name, 1, 1) BETWEEN 'А' AND 'Я' THEN SUBSTR(a.last_name, 1, 1)
-                WHEN SUBSTR(a.last_name, 1, 1) = 'Ё' THEN 'Ё'
-                ELSE UPPER(SUBSTR(a.last_name, 1, 1))
+                WHEN SUBSTR(a.last_name_lower, 1, 1) BETWEEN 'a' AND 'z' THEN SUBSTR(a.last_name_lower, 1, 1)
+                WHEN SUBSTR(a.last_name_lower, 1, 1) BETWEEN 'а' AND 'я' THEN SUBSTR(a.last_name_lower, 1, 1)
+                WHEN SUBSTR(a.last_name_lower, 1, 1) = 'ё' THEN 'ё'
+                ELSE SUBSTR(a.last_name_lower, 1, 1)
             END as first_letter, 
             COUNT(DISTINCT a.id) as author_count
         FROM authors a
         JOIN book_authors ba ON a.id = ba.author_id
         JOIN books b ON ba.book_id = b.id
         WHERE a.full_name IS NOT NULL AND a.full_name != ''
-          AND a.last_name IS NOT NULL AND a.last_name != ''
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
         GROUP BY 
             CASE 
-                WHEN UPPER(SUBSTR(a.last_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(a.last_name, 1, 1))
-                WHEN SUBSTR(a.last_name, 1, 1) BETWEEN 'А' AND 'Я' THEN SUBSTR(a.last_name, 1, 1)
-                WHEN SUBSTR(a.last_name, 1, 1) = 'Ё' THEN 'Ё'
-                ELSE UPPER(SUBSTR(a.last_name, 1, 1))
+                WHEN SUBSTR(a.last_name_lower, 1, 1) BETWEEN 'a' AND 'z' THEN SUBSTR(a.last_name_lower, 1, 1)
+                WHEN SUBSTR(a.last_name_lower, 1, 1) BETWEEN 'а' AND 'я' THEN SUBSTR(a.last_name_lower, 1, 1)
+                WHEN SUBSTR(a.last_name_lower, 1, 1) = 'ё' THEN 'ё'
+                ELSE SUBSTR(a.last_name_lower, 1, 1)
             END
         ORDER BY 
             CASE 
-                WHEN first_letter BETWEEN 'A' AND 'Z' THEN 1
-                WHEN first_letter BETWEEN 'А' AND 'Я' THEN 2
-                WHEN first_letter = 'Ё' THEN 3
+                WHEN first_letter BETWEEN 'a' AND 'z' THEN 1
+                WHEN first_letter BETWEEN 'а' AND 'я' THEN 2
+                WHEN first_letter = 'ё' THEN 3
                 ELSE 4
             END,
             first_letter
@@ -174,50 +172,50 @@ func (ah *AuthorHandler) getAuthorsByLetter(letter string) ([]*models.Author, ma
 	var authorRows *sql.Rows
 	var err error
 
-	switch letter {
-	case "А", "Б", "В", "Г", "Д", "Е", "Ж", "З", "И", "Й", "К", "Л", "М",
-		"Н", "О", "П", "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Ъ", "Ы", "Ь", "Э", "Ю", "Я":
+	// Используем lower-версию буквы для поиска
+	lowerLetter := strings.ToLower(letter)
+
+	switch lowerLetter {
+	case "а", "б", "в", "г", "д", "е", "ж", "з", "и", "й", "к", "л", "м",
+		"н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я":
 		authorRows, err = ah.db.Query(`
-            SELECT a.last_name, a.full_name, COUNT(DISTINCT b.id) as book_count 
+            SELECT a.last_name_lower, a.full_name, COUNT(DISTINCT b.id) as book_count 
             FROM authors a
             JOIN book_authors ba ON a.id = ba.author_id
             JOIN books b ON ba.book_id = b.id
-            WHERE a.full_name IS NOT NULL AND a.full_name != ''
-              AND a.last_name IS NOT NULL AND a.last_name != ''
-              AND SUBSTR(a.last_name, 1, 1) = ?
+            WHERE a.full_name IS NOT NULL AND a.full_name != '' -- Достаточно проверить full_name
+              AND SUBSTR(a.last_name_lower, 1, 1) = ? -- Используем last_name_lower для поиска
               AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
               AND (b.over18 IS NULL OR b.over18 = 0)
-            GROUP BY a.last_name, a.full_name
-            ORDER BY a.last_name, a.full_name
-        `, letter)
-	case "Ё":
+            GROUP BY a.last_name_lower, a.full_name -- Группируем по last_name_lower
+            ORDER BY a.last_name_lower, a.full_name_lower
+        `, lowerLetter)
+	case "ё":
 		authorRows, err = ah.db.Query(`
-            SELECT a.last_name, a.full_name, COUNT(DISTINCT b.id) as book_count 
+            SELECT a.last_name_lower, a.full_name, COUNT(DISTINCT b.id) as book_count 
             FROM authors a
             JOIN book_authors ba ON a.id = ba.author_id
             JOIN books b ON ba.book_id = b.id
-            WHERE a.full_name IS NOT NULL AND a.full_name != ''
-              AND a.last_name IS NOT NULL AND a.last_name != ''
-              AND (SUBSTR(a.last_name, 1, 1) = 'Ё' OR SUBSTR(a.last_name, 1, 1) = 'Е')
+            WHERE a.full_name IS NOT NULL AND a.full_name != '' -- Достаточно проверить full_name
+              AND (SUBSTR(a.last_name_lower, 1, 1) = 'ё' OR SUBSTR(a.last_name_lower, 1, 1) = 'е') -- Используем last_name_lower
               AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
               AND (b.over18 IS NULL OR b.over18 = 0)
-            GROUP BY a.last_name, a.full_name
-            ORDER BY a.last_name, a.full_name
+            GROUP BY a.last_name_lower, a.full_name -- Группируем по last_name_lower
+            ORDER BY a.last_name_lower, a.full_name_lower
         `)
 	default:
 		authorRows, err = ah.db.Query(`
-            SELECT a.last_name, a.full_name, COUNT(DISTINCT b.id) as book_count 
+            SELECT a.last_name_lower, a.full_name, COUNT(DISTINCT b.id) as book_count 
             FROM authors a
             JOIN book_authors ba ON a.id = ba.author_id
             JOIN books b ON ba.book_id = b.id
-            WHERE a.full_name IS NOT NULL AND a.full_name != ''
-              AND a.last_name IS NOT NULL AND a.last_name != ''
-              AND UPPER(SUBSTR(a.last_name, 1, 1)) = UPPER(?)
+            WHERE a.full_name IS NOT NULL AND a.full_name != '' -- Достаточно проверить full_name
+              AND SUBSTR(a.last_name_lower, 1, 1) = ? -- Используем last_name_lower
               AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
               AND (b.over18 IS NULL OR b.over18 = 0)
-            GROUP BY a.last_name, a.full_name
-            ORDER BY a.last_name, a.full_name
-        `, letter)
+            GROUP BY a.last_name_lower, a.full_name -- Группируем по last_name_lower
+            ORDER BY a.last_name_lower, a.full_name_lower
+        `, lowerLetter)
 	}
 
 	if err != nil {
@@ -226,12 +224,12 @@ func (ah *AuthorHandler) getAuthorsByLetter(letter string) ([]*models.Author, ma
 	defer authorRows.Close()
 
 	var authors []*models.Author
-	bookCounts := make(map[string]int)
+	bookCounts := make(map[string]int) // Предполагая, что bookCounts всё ещё нужен
 
 	for authorRows.Next() {
-		var lastName, fullName string
+		var lastNameLower, fullName string // Используем lastNameLower
 		var bookCount int
-		if err := authorRows.Scan(&lastName, &fullName, &bookCount); err != nil {
+		if err := authorRows.Scan(&lastNameLower, &fullName, &bookCount); err != nil {
 			if cfg.Debug {
 				log.Printf("Ошибка сканирования автора: %v", err)
 			}
@@ -239,11 +237,11 @@ func (ah *AuthorHandler) getAuthorsByLetter(letter string) ([]*models.Author, ma
 		}
 
 		author := &models.Author{
-			LastName: lastName,
+			LastName: lastNameLower, // Заполняем LastName значением из last_name_lower
 			FullName: fullName,
 		}
 		authors = append(authors, author)
-		bookCounts[fullName] = bookCount
+		bookCounts[fullName] = bookCount // Предполагая, что bookCounts всё ещё нужен
 	}
 
 	return authors, bookCounts, authorRows.Err()
@@ -253,16 +251,15 @@ func (ah *AuthorHandler) getAuthorsByLetter(letter string) ([]*models.Author, ma
 func (ah *AuthorHandler) getAllAuthors() ([]*models.Author, map[string]int, error) {
 	cfg := config.GetConfig()
 	authorRows, err := ah.db.Query(`
-        SELECT a.last_name, a.full_name, COUNT(DISTINCT b.id) as book_count 
+        SELECT a.last_name_lower, a.full_name, COUNT(DISTINCT b.id) as book_count 
         FROM authors a
         JOIN book_authors ba ON a.id = ba.author_id
         JOIN books b ON ba.book_id = b.id
-        WHERE a.full_name IS NOT NULL AND a.full_name != ''
-          AND a.last_name IS NOT NULL AND a.last_name != ''
+        WHERE a.full_name IS NOT NULL AND a.full_name != '' -- Достаточно проверить full_name
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
-        GROUP BY a.last_name, a.full_name
-        ORDER BY a.last_name, a.full_name
+        GROUP BY a.last_name_lower, a.full_name -- Группируем по last_name_lower
+        ORDER BY a.last_name_lower, a.full_name_lower -- Сортируем по last_name_lower и full_name_lower
     `)
 	if err != nil {
 		return nil, nil, err
@@ -273,17 +270,25 @@ func (ah *AuthorHandler) getAllAuthors() ([]*models.Author, map[string]int, erro
 	bookCounts := make(map[string]int)
 
 	for authorRows.Next() {
-		var lastName, fullName string
+		// var lastName, fullName string // Изменено: lastName -> lastNameLower
+		var lastNameLower, fullName string // Используем lastNameLower
 		var bookCount int
-		if err := authorRows.Scan(&lastName, &fullName, &bookCount); err != nil {
+		// if err := authorRows.Scan(&lastName, &fullName, &bookCount); err != nil { // Изменено
+		if err := authorRows.Scan(&lastNameLower, &fullName, &bookCount); err != nil {
 			if cfg.Debug {
 				log.Printf("Ошибка сканирования автора: %v", err)
 			}
 			continue
 		}
 
+		// author := &models.Author{ // Изменено
+		// 	LastName: lastName, // Изменено
+		// 	FullName: fullName,
+		// }
+
+		// Создаем объект Author, используя lastNameLower для поля LastName
 		author := &models.Author{
-			LastName: lastName,
+			LastName: lastNameLower, // Заполняем LastName значением из last_name_lower БД
 			FullName: fullName,
 		}
 		authors = append(authors, author)
@@ -296,6 +301,8 @@ func (ah *AuthorHandler) getAllAuthors() ([]*models.Author, map[string]int, erro
 // getBooksByAuthor получает книги автора
 func (ah *AuthorHandler) getBooksByAuthor(authorName string) (map[int]*models.Book, error) {
 	cfg := config.GetConfig()
+	// Используем lower-версию имени автора для поиска
+	lowerAuthorName := strings.ToLower(authorName)
 	query := `
         SELECT DISTINCT b.id as book_id, b.title, b.series, b.series_number, b.published_at,
                b.isbn, b.year, b.publisher,
@@ -306,20 +313,20 @@ func (ah *AuthorHandler) getBooksByAuthor(authorName string) (map[int]*models.Bo
             FROM books b2
             JOIN book_authors ba2 ON b2.id = ba2.book_id
             JOIN authors a2 ON ba2.author_id = a2.id
-            WHERE (a2.full_name = ? OR a2.full_name LIKE ?)
+            WHERE (a2.full_name_lower = ? OR a2.full_name_lower LIKE ?)
               AND b2.file_type IN ('epub', 'fb2', 'fb2.zip')
               AND (b2.over18 IS NULL OR b2.over18 = 0)
         )
         AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
         AND (b.over18 IS NULL OR b.over18 = 0)
-        ORDER BY b.title, 
-                 (SELECT MIN(a3.last_name) 
+        ORDER BY b.title_lower, 
+                 (SELECT MIN(a3.last_name_lower) 
                   FROM book_authors ba3 
                   JOIN authors a3 ON ba3.author_id = a3.id 
                   WHERE ba3.book_id = b.id)
     `
 
-	bookRows, err := ah.db.Query(query, authorName, "%"+authorName+"%")
+	bookRows, err := ah.db.Query(query, lowerAuthorName, "%"+lowerAuthorName+"%")
 	if err != nil {
 		return nil, err
 	}

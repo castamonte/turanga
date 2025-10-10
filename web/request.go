@@ -14,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	//	"time"
+
 	"turanga/config"
+	"turanga/scanner"
 )
 
 // ResponseBook представляет книгу из ответа
@@ -46,6 +49,7 @@ type RequestInfo struct {
 	Series   string
 	Title    string
 	FileHash string
+	ISBN     string
 }
 
 // ShowRequestFormHandler отображает форму запроса книги через Nostr или ответы на активные запросы
@@ -76,6 +80,15 @@ func (w *WebInterface) ShowRequestFormHandler(wr http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Проверяем, есть ли конкретный ID запроса в URL параметрах
+	requestEventID := r.URL.Query().Get("request_id")
+
+	if requestEventID != "" {
+		// Показываем ответы на конкретный запрос
+		w.showResponsesForActiveRequests(wr, r) // Она теперь сама разберётся
+		return
+	}
+
 	// Проверяем, есть ли отправленные запросы
 	hasActiveRequests, err := w.hasActiveRequests()
 	if err != nil {
@@ -94,7 +107,7 @@ func (w *WebInterface) ShowRequestFormHandler(wr http.ResponseWriter, r *http.Re
 	w.showRequestForm(wr, r)
 }
 
-// getActiveRequestResponses получает ответы на НАШИ отправленные запросы, сгруппированные по сериям
+// getActiveRequestResponses получает ответы на НАШ последний отправленный запрос, сгруппированные по сериям
 // Исключает книги, которые находятся в чёрном списке
 func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 	cfg := config.GetConfig()
@@ -117,7 +130,66 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 		blockedHashes = blacklist.GetAllBlockedFileHashes()
 	}
 
-	// Формируем базовый запрос
+	// Сначала получаем ID последнего отправленного запроса
+	var lastRequestEventID string
+	err := w.db.QueryRow(`
+        SELECT event_id 
+        FROM nostr_book_requests 
+        WHERE sent = 1 AND pubkey = ? 
+        ORDER BY created_at DESC 
+        LIMIT 1
+    `, ourPubkey).Scan(&lastRequestEventID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Нет отправленных запросов
+			if cfg.Debug {
+				log.Printf("No sent requests found for pubkey %s", ourPubkey)
+			}
+			return []ResponseGroup{}, nil
+		}
+		log.Printf("Database query error getting last request ID: %v", err)
+		return nil, err
+	}
+
+	if cfg.Debug {
+		log.Printf("Looking for responses to our last request ID: %s", lastRequestEventID)
+	}
+
+	// Посчитаем, сколько всего у нас запросов
+	var totalRequests int
+	err = w.db.QueryRow("SELECT COUNT(*) FROM nostr_book_requests WHERE sent = 1 AND pubkey = ?", ourPubkey).Scan(&totalRequests)
+	if err != nil && cfg.Debug {
+		log.Printf("Error counting total requests: %v", err)
+	}
+
+	if cfg.Debug {
+		log.Printf("Total sent requests for our pubkey: %d", totalRequests)
+	}
+
+	// Посчитаем, сколько ответов есть в базе всего
+	var totalResponses int
+	err = w.db.QueryRow("SELECT COUNT(*) FROM nostr_received_responses WHERE request_event_id IN (SELECT event_id FROM nostr_book_requests WHERE pubkey = ?)", ourPubkey).Scan(&totalResponses)
+	if err != nil && cfg.Debug {
+		log.Printf("Error counting total responses: %v", err)
+	}
+
+	if cfg.Debug {
+		log.Printf("Total responses to our requests in DB: %d", totalResponses)
+	}
+
+	// Посчитаем, сколько ответов конкретно на последний запрос
+	var responsesForLastRequest int
+	err = w.db.QueryRow("SELECT COUNT(*) FROM nostr_received_responses WHERE request_event_id = ?", lastRequestEventID).Scan(&responsesForLastRequest)
+	if err != nil && cfg.Debug {
+		log.Printf("Error counting responses for last request: %v", err)
+	}
+
+	if cfg.Debug {
+		log.Printf("Responses specifically for last request %s: %d", lastRequestEventID, responsesForLastRequest)
+	}
+
+	// Формируем базовый запрос для получения ответов только на последний запрос
 	query := `
         SELECT DISTINCT
             nrb.id,
@@ -130,18 +202,15 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
             nrb.file_hash,
             nrb.ipfs_cid,
             CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END as is_local,
-            b.id as local_id, -- <-- Убедимся, что это поле заполняется правильно
+            b.id as local_id,
             nrr.responder_pubkey
         FROM nostr_response_books nrb
         JOIN nostr_received_responses nrr ON nrb.response_id = nrr.id
-        LEFT JOIN books b ON nrb.file_hash = b.file_hash -- <-- LEFT JOIN для получения ID локальной книги
-        WHERE nrr.request_event_id IN (
-            SELECT event_id FROM nostr_book_requests 
-            WHERE sent = 1 AND pubkey = ?
-        )
+        LEFT JOIN books b ON nrb.file_hash = b.file_hash
+        WHERE nrr.request_event_id = ?
     `
 
-	args := []interface{}{ourPubkey}
+	args := []interface{}{lastRequestEventID}
 
 	// Добавляем фильтрацию по чёрному списку
 	if len(blockedHashes) > 0 {
@@ -171,7 +240,7 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 		count++
 		var book ResponseBook
 		var isLocal int
-		var localID sql.NullInt64 // <-- Используем sql.NullInt64
+		var localID sql.NullInt64
 		var responderPubkey string
 		err := rows.Scan(
 			&book.ID,
@@ -184,7 +253,7 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 			&book.FileHash,
 			&book.IPFSCID,
 			&isLocal,
-			&localID, // <-- Сканируем в sql.NullInt64
+			&localID,
 			&responderPubkey,
 		)
 		if err != nil {
@@ -194,7 +263,7 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 			return nil, err
 		}
 		book.IsLocal = isLocal == 1
-		book.LocalID = localID // <-- Присваиваем отсканированное значение
+		book.LocalID = localID
 		book.ResponderPubkey = responderPubkey
 
 		seriesKey := book.Series
@@ -206,7 +275,7 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 	}
 
 	if cfg.Debug {
-		log.Printf("Found %d books in response for pubkey %s (after blacklist filter)", count, ourPubkey)
+		log.Printf("Found %d books in response for last request %s (after blacklist filter)", count, lastRequestEventID)
 	}
 
 	// Преобразуем в группы
@@ -228,22 +297,6 @@ func (w *WebInterface) getActiveRequestResponses() ([]ResponseGroup, error) {
 	}
 
 	return groups, nil
-}
-
-// getLastRequestID получает ID последнего нашего отправленного запроса
-func (w *WebInterface) getLastRequestID() (int64, error) {
-	var id int64
-	err := w.db.QueryRow(`
-        SELECT id 
-        FROM nostr_book_requests 
-        WHERE sent = 1 AND pubkey = ? 
-        ORDER BY created_at DESC 
-        LIMIT 1
-    `, w.NostrClient.GetPublicKey()).Scan(&id)
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
 }
 
 // showRequestForm показывает форму для нового запроса
@@ -296,23 +349,47 @@ func (w *WebInterface) showRequestForm(wr http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// showResponsesForActiveRequests отображает ответы на активные запросы
 func (w *WebInterface) showResponsesForActiveRequests(wr http.ResponseWriter, r *http.Request) {
 	cfg := config.GetConfig()
 
-	// Получаем ответы на активные запросы
-	responseGroups, err := w.getActiveRequestResponses()
+	// Проверяем, есть ли конкретный ID запроса в URL параметрах
+	requestEventID := r.URL.Query().Get("request_id")
+
+	var responseGroups []ResponseGroup
+	var err error
+
+	if requestEventID != "" {
+		// Получаем ответы на конкретный запрос
+		responseGroups, err = w.getResponsesForSpecificRequest(requestEventID)
+	} else {
+		// Получаем ответы на все наши активные запросы (как раньше)
+		responseGroups, err = w.getActiveRequestResponses()
+	}
+
 	if err != nil {
 		log.Printf("Error getting responses for active requests: %v", err)
 		http.Error(wr, "Database error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Получаем информацию о последнем запросе
-	requestInfo, err := w.getLastRequestInfo()
-	if err != nil {
-		log.Printf("Error getting last request info: %v", err)
-		// Не критично, продолжаем без информации о запросе
-		requestInfo = RequestInfo{}
+	// Получаем информацию о конкретном запросе, если указан ID
+	var requestInfo RequestInfo
+	if requestEventID != "" {
+		requestInfo, err = w.getRequestInfoByID(requestEventID)
+		if err != nil {
+			log.Printf("Error getting request info by ID %s: %v", requestEventID, err)
+			// Не критично, продолжаем без информации о запросе
+			requestInfo = RequestInfo{}
+		}
+	} else {
+		// Получаем информацию о последнем запросе (как раньше)
+		requestInfo, err = w.getLastRequestInfo()
+		if err != nil {
+			log.Printf("Error getting last request info: %v", err)
+			// Не критично, продолжаем без информации о запросе
+			requestInfo = RequestInfo{}
+		}
 	}
 
 	// Подготавливаем данные для шаблона
@@ -361,7 +438,165 @@ func (w *WebInterface) showResponsesForActiveRequests(wr http.ResponseWriter, r 
 	}
 }
 
-// HandleRequestFormHandler обрабатывает отправку формы запроса книги
+// getResponsesForSpecificRequest получает ответы на конкретный запрос по его event_id
+func (w *WebInterface) getResponsesForSpecificRequest(requestEventID string) ([]ResponseGroup, error) {
+	cfg := config.GetConfig()
+
+	// Проверяем, есть ли у нас Nostr клиент
+	if w.NostrClient == nil {
+		return []ResponseGroup{}, nil
+	}
+
+	// Получаем наш публичный ключ
+	ourPubkey := w.NostrClient.GetPublicKey()
+	if ourPubkey == "" {
+		return []ResponseGroup{}, nil
+	}
+
+	// Получаем чёрный список для фильтрации
+	blacklist := w.NostrClient.GetBlacklist()
+	var blockedHashes []string
+	if blacklist != nil {
+		blockedHashes = blacklist.GetAllBlockedFileHashes()
+	}
+
+	// Формируем запрос для получения ответов только на конкретный запрос
+	query := `
+        SELECT DISTINCT
+            nrb.id,
+            nrb.title,
+            nrb.authors,
+            nrb.series,
+            nrb.series_number,
+            nrb.file_type,
+            nrb.file_size,
+            nrb.file_hash,
+            nrb.ipfs_cid,
+            CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END as is_local,
+            b.id as local_id,
+            nrr.responder_pubkey
+        FROM nostr_response_books nrb
+        JOIN nostr_received_responses nrr ON nrb.response_id = nrr.id
+        LEFT JOIN books b ON nrb.file_hash = b.file_hash
+        WHERE nrr.request_event_id = ? AND EXISTS (
+            SELECT 1 FROM nostr_book_requests nbr 
+            WHERE nbr.event_id = nrr.request_event_id AND nbr.pubkey = ?
+        )
+    `
+
+	args := []interface{}{requestEventID, ourPubkey}
+
+	// Добавляем фильтрацию по чёрному списку
+	if len(blockedHashes) > 0 {
+		placeholders := make([]string, len(blockedHashes))
+		for i, hash := range blockedHashes {
+			placeholders[i] = "?"
+			args = append(args, hash)
+		}
+		query += " AND nrb.file_hash NOT IN (" + strings.Join(placeholders, ",") + ")"
+	}
+
+	query += ` ORDER BY nrb.series, nrb.series_number, nrb.title`
+
+	rows, err := w.db.Query(query, args...)
+	if err != nil {
+		log.Printf("Database query error for specific request: %v", err)
+		log.Printf("Query: %s", query)
+		log.Printf("Args count: %d", len(args))
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Группируем по сериям
+	seriesMap := make(map[string][]ResponseBook)
+	count := 0
+	for rows.Next() {
+		count++
+		var book ResponseBook
+		var isLocal int
+		var localID sql.NullInt64
+		var responderPubkey string
+		err := rows.Scan(
+			&book.ID,
+			&book.Title,
+			&book.Authors,
+			&book.Series,
+			&book.SeriesNumber,
+			&book.FileType,
+			&book.FileSize,
+			&book.FileHash,
+			&book.IPFSCID,
+			&isLocal,
+			&localID,
+			&responderPubkey,
+		)
+		if err != nil {
+			if cfg.Debug {
+				log.Printf("Scan error: %v", err)
+			}
+			return nil, err
+		}
+		book.IsLocal = isLocal == 1
+		book.LocalID = localID
+		book.ResponderPubkey = responderPubkey
+
+		seriesKey := book.Series
+		if seriesKey == "" {
+			seriesKey = "Без серии"
+		}
+
+		seriesMap[seriesKey] = append(seriesMap[seriesKey], book)
+	}
+
+	if cfg.Debug {
+		log.Printf("Found %d books in response for specific request %s", count, requestEventID)
+	}
+
+	// Преобразуем в группы
+	var groups []ResponseGroup
+	for series, books := range seriesMap {
+		hasLocal := false
+		for _, book := range books {
+			if book.IsLocal {
+				hasLocal = true
+				break
+			}
+		}
+
+		groups = append(groups, ResponseGroup{
+			Series:   series,
+			Books:    books,
+			HasLocal: hasLocal,
+		})
+	}
+
+	return groups, nil
+}
+
+// getRequestInfoByID возвращает информацию о запросе по его event_id
+func (w *WebInterface) getRequestInfoByID(requestEventID string) (RequestInfo, error) {
+	var info RequestInfo
+
+	// Запрашиваем информацию о конкретном запросе из таблицы nostr_book_requests
+	err := w.db.QueryRow(`
+		SELECT author, series, title, file_hash, isbn 
+		FROM nostr_book_requests 
+		WHERE event_id = ? AND pubkey = (SELECT pubkey FROM nostr_book_requests WHERE event_id = ? LIMIT 1)
+		LIMIT 1
+	`, requestEventID, requestEventID).Scan(&info.Author, &info.Series, &info.Title, &info.FileHash, &info.ISBN)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Запрос не найден, возвращаем пустую структуру без ошибки
+			return RequestInfo{}, nil
+		}
+		return RequestInfo{}, err
+	}
+
+	return info, nil
+}
+
+// HandleRequestFormHandler обрабатывает отправку формы запроса книги через Nostr
 func (w *WebInterface) HandleRequestFormHandler(wr http.ResponseWriter, r *http.Request) {
 	cfg := config.GetConfig()
 
@@ -383,35 +618,33 @@ func (w *WebInterface) HandleRequestFormHandler(wr http.ResponseWriter, r *http.
 		return
 	}
 
-	// Получаем данные формы
-	author := strings.TrimSpace(r.FormValue("author"))
-	series := strings.TrimSpace(r.FormValue("series"))
-	title := strings.TrimSpace(r.FormValue("title"))
-	fileHash := strings.TrimSpace(r.FormValue("file_hash"))
+	// Получаем параметры из формы
+	author := r.FormValue("author")
+	series := r.FormValue("series")
+	title := r.FormValue("title")
+	fileHash := r.FormValue("file_hash")
+	isbn := r.FormValue("isbn") // <-- Добавляем ISBN
 
-	if cfg.Debug {
-		log.Printf("Received request form data - Author: '%s', Series: '%s', Title: '%s', FileHash: '%s'",
-			author, series, title, fileHash)
+	// Валидируем ISBN, если задан
+	if isbn != "" {
+		isbn = strings.TrimSpace(isbn)
+		if !scanner.IsValidISBN(isbn) {
+			log.Printf("Invalid ISBN provided: %s", isbn)
+			http.Error(wr, "Invalid ISBN format", http.StatusBadRequest)
+			return
+		}
 	}
 
-	// Валидация запроса
+	// Валидируем остальные параметры
+	author = strings.TrimSpace(author)
+	series = strings.TrimSpace(series)
+	title = strings.TrimSpace(title)
+	fileHash = strings.TrimSpace(fileHash)
+
 	// Проверяем, что хотя бы одно поле заполнено
-	if author == "" && series == "" && title == "" && fileHash == "" {
-		log.Printf("Empty request form data")
-		http.Error(wr, "Заполните хотя бы одно поле", http.StatusBadRequest)
-		return
-	}
-
-	// Проверяем минимальную длину для серии и названия (если заданы)
-	if series != "" && len(series) < 4 {
-		log.Printf("Series too short: '%s'", series)
-		http.Error(wr, "Серия должна быть не менее 4 символов", http.StatusBadRequest)
-		return
-	}
-
-	if title != "" && len(title) < 4 {
-		log.Printf("Title too short: '%s'", title)
-		http.Error(wr, "Название должно быть не менее 4 символов", http.StatusBadRequest)
+	if author == "" && series == "" && title == "" && fileHash == "" && isbn == "" {
+		log.Println("Request form submitted with all fields empty")
+		http.Error(wr, "At least one field must be filled", http.StatusBadRequest)
 		return
 	}
 
@@ -419,24 +652,22 @@ func (w *WebInterface) HandleRequestFormHandler(wr http.ResponseWriter, r *http.
 	if fileHash != "" {
 		// Хеш должен быть длиной 16 символов и содержать только [a-f0-9]
 		if len(fileHash) != 16 {
-			log.Printf("Invalid file hash length: %d", len(fileHash))
-			http.Error(wr, "Хеш файла должен быть длиной 16 символов", http.StatusBadRequest)
+			if cfg.Debug {
+				log.Printf("Request form submitted with invalid hash length %d", len(fileHash))
+			}
+			http.Error(wr, "File hash must be exactly 16 characters long", http.StatusBadRequest)
 			return
 		}
 
 		// Проверяем, что хеш содержит только допустимые символы
-		valid := true
-		for _, c := range fileHash {
-			if !((c >= 'a' && c <= 'f') || (c >= '0' && c <= '9')) {
-				valid = false
-				break
+		for _, char := range fileHash {
+			if !((char >= 'a' && char <= 'f') || (char >= '0' && char <= '9')) {
+				if cfg.Debug {
+					log.Printf("Request form submitted with invalid hash character '%c' in hash '%s'", char, fileHash)
+				}
+				http.Error(wr, "File hash contains invalid characters", http.StatusBadRequest)
+				return
 			}
-		}
-
-		if !valid {
-			log.Printf("Invalid file hash characters: '%s'", fileHash)
-			http.Error(wr, "Хеш файла должен содержать только символы a-f и 0-9", http.StatusBadRequest)
-			return
 		}
 	}
 
@@ -467,43 +698,35 @@ func (w *WebInterface) HandleRequestFormHandler(wr http.ResponseWriter, r *http.
 	defer cancel()
 
 	// Публикуем событие запроса через Nostr клиент
-	err := w.NostrClient.PublishBookRequestEvent(pubCtx, author, series, title, fileHash)
+	err := w.NostrClient.PublishBookRequestEvent(pubCtx, author, series, title, fileHash, isbn)
 	if err != nil {
-		log.Printf("Ошибка публикации запроса книги через Nostr: %v", err)
-		http.Error(wr, "Ошибка отправки запроса в сеть Nostr: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Error publishing book request event: %v", err)
+		http.Error(wr, "Error publishing request: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if cfg.Debug {
-		log.Printf("Запрос книги через Nostr успешно отправлен: Автор='%s', Серия='%s', Название='%s', Хеш='%s'",
-			author, series, title, fileHash)
-	}
-
-	// Перенаправляем на страницу с ответами
+	// Успешно отправлено - перенаправляем на страницу с ответами
 	http.Redirect(wr, r, "/request", http.StatusSeeOther)
 }
 
-// getLastRequestInfo получает информацию о последнем НАШЕМ запросе
+// getLastRequestInfo возвращает информацию о последнем отправленном запросе
 func (w *WebInterface) getLastRequestInfo() (RequestInfo, error) {
 	var info RequestInfo
-	if w.NostrClient == nil {
-		return info, fmt.Errorf("nostr client not initialized")
-	}
 
-	ourPubkey := w.NostrClient.GetPublicKey()
-	if ourPubkey == "" {
-		return info, fmt.Errorf("nostr pubkey not available")
-	}
-
+	// Запрашиваем информацию о последнем запросе из таблицы nostr_book_requests
 	err := w.db.QueryRow(`
-        SELECT author, series, title, file_hash 
-        FROM nostr_book_requests 
-        WHERE sent = 1 AND pubkey = ?
-        ORDER BY created_at DESC 
-        LIMIT 1
-    `, ourPubkey).Scan(&info.Author, &info.Series, &info.Title, &info.FileHash)
+		SELECT author, series, title, file_hash, isbn 
+		FROM nostr_book_requests 
+		WHERE sent = 1 
+		ORDER BY created_at DESC 
+		LIMIT 1
+	`).Scan(&info.Author, &info.Series, &info.Title, &info.FileHash, &info.ISBN)
 
 	if err != nil {
+		if err == sql.ErrNoRows {
+			// Нет активных запросов, возвращаем пустую структуру без ошибки
+			return RequestInfo{}, nil
+		}
 		return RequestInfo{}, err
 	}
 

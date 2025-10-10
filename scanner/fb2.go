@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"os"
@@ -211,14 +212,15 @@ func ExtractFB2Metadata(filePath string) (author, title, annotation, isbn, year,
 
 // processFB2Metadata обрабатывает извлеченные метаданные
 func processFB2Metadata(fb2 FB2Description) (author, title, annotation, isbn, year, publisher, series, seriesNumber string, err error) {
-	// Извлекаем название
-	title = strings.TrimSpace(fb2.Description.TitleInfo.BookTitle)
+	// Декодируем HTML-сущности в извлеченных данных
+	title = html.UnescapeString(strings.TrimSpace(fb2.Description.TitleInfo.BookTitle))
 
 	// Извлекаем авторов - только имя и фамилия
 	var authorNames []string
 	for _, auth := range fb2.Description.TitleInfo.Authors {
-		firstName := strings.TrimSpace(auth.FirstName)
-		lastName := strings.TrimSpace(auth.LastName)
+		// Декодируем HTML-сущности
+		firstName := html.UnescapeString(strings.TrimSpace(auth.FirstName))
+		lastName := html.UnescapeString(strings.TrimSpace(auth.LastName))
 		// ИГНОРИРУЕМ MiddleName
 
 		// Формируем имя автора только из имени и фамилии
@@ -242,13 +244,16 @@ func processFB2Metadata(fb2 FB2Description) (author, title, annotation, isbn, ye
 
 	// Извлекаем аннотацию
 	if fb2.Description.TitleInfo.Annotation.Text != "" {
-		// Очищаем HTML теги из аннотации
-		annotation = cleanHTML(fb2.Description.TitleInfo.Annotation.Text)
+		// Декодируем HTML-сущности и очищаем HTML теги из аннотации
+		decodedAnnotation := html.UnescapeString(fb2.Description.TitleInfo.Annotation.Text)
+		annotation = cleanHTML(decodedAnnotation)
 	} else if len(fb2.Description.TitleInfo.Annotation.P) > 0 {
 		var annotationParts []string
 		for _, p := range fb2.Description.TitleInfo.Annotation.P {
 			if strings.TrimSpace(p.Text) != "" {
-				annotationParts = append(annotationParts, strings.TrimSpace(p.Text))
+				// Декодируем HTML-сущности
+				decodedText := html.UnescapeString(strings.TrimSpace(p.Text))
+				annotationParts = append(annotationParts, decodedText)
 			}
 		}
 		annotation = strings.Join(annotationParts, "\n")
@@ -256,18 +261,19 @@ func processFB2Metadata(fb2 FB2Description) (author, title, annotation, isbn, ye
 	annotation = strings.TrimSpace(annotation)
 
 	// Извлекаем ISBN
-	isbn = strings.TrimSpace(fb2.Description.PublishInfo.ISBN)
+	isbn = html.UnescapeString(strings.TrimSpace(fb2.Description.PublishInfo.ISBN))
 
 	// Извлекаем год
-	year = strings.TrimSpace(fb2.Description.PublishInfo.Year)
+	year = html.UnescapeString(strings.TrimSpace(fb2.Description.PublishInfo.Year))
 
 	// Извлекаем издателя
-	publisher = strings.TrimSpace(fb2.Description.PublishInfo.Publisher)
+	publisher = html.UnescapeString(strings.TrimSpace(fb2.Description.PublishInfo.Publisher))
 
 	// Извлекаем серию и номер в серии
 	if len(fb2.Description.TitleInfo.Sequence) > 0 {
-		series = strings.TrimSpace(fb2.Description.TitleInfo.Sequence[0].Name)
-		seriesNumber = strings.TrimSpace(fb2.Description.TitleInfo.Sequence[0].Number)
+		// Декодируем HTML-сущности
+		series = html.UnescapeString(strings.TrimSpace(fb2.Description.TitleInfo.Sequence[0].Name))
+		seriesNumber = html.UnescapeString(strings.TrimSpace(fb2.Description.TitleInfo.Sequence[0].Number))
 	}
 
 	// Проверка результатов
@@ -286,7 +292,9 @@ func extractFB2MetadataFlexible(xmlContent string) (author, title, annotation, i
 	titleRegex := regexp.MustCompile(`<book-title[^>]*>(.*?)</book-title>`)
 	titleMatches := titleRegex.FindStringSubmatch(xmlContent)
 	if len(titleMatches) > 1 {
-		title = strings.TrimSpace(cleanHTML(titleMatches[1]))
+		// Декодируем HTML-сущности
+		decodedTitle := html.UnescapeString(titleMatches[1])
+		title = strings.TrimSpace(cleanHTML(decodedTitle))
 	}
 
 	// Извлекаем авторов - только имя и фамилия
@@ -306,10 +314,12 @@ func extractFB2MetadataFlexible(xmlContent string) (author, title, annotation, i
 
 			var firstName, lastName string
 			if len(firstNameMatches) > 1 {
-				firstName = strings.TrimSpace(firstNameMatches[1])
+				// Декодируем HTML-сущности
+				firstName = strings.TrimSpace(html.UnescapeString(firstNameMatches[1]))
 			}
 			if len(lastNameMatches) > 1 {
-				lastName = strings.TrimSpace(lastNameMatches[1])
+				// Декодируем HTML-сущности
+				lastName = strings.TrimSpace(html.UnescapeString(lastNameMatches[1]))
 			}
 
 			// Формируем полное имя только из имени и фамилии
@@ -338,7 +348,8 @@ func extractFB2MetadataFlexible(xmlContent string) (author, title, annotation, i
 	annotationRegex := regexp.MustCompile(`(?s)<annotation[^>]*>(.*?)</annotation>`)
 	annotationMatches := annotationRegex.FindStringSubmatch(xmlContent)
 	if len(annotationMatches) > 1 {
-		annotationRaw := annotationMatches[1]
+		// Декодируем HTML-сущности
+		annotationRaw := html.UnescapeString(annotationMatches[1])
 		annotation = strings.TrimSpace(cleanHTML(annotationRaw))
 		if cfg.Debug {
 			log.Printf("Аннотация из гибкого парсинга (до очистки): %s", annotationRaw[:min(100, len(annotationRaw))])
@@ -350,42 +361,48 @@ func extractFB2MetadataFlexible(xmlContent string) (author, title, annotation, i
 	isbnRegex := regexp.MustCompile(`<isbn[^>]*>(.*?)</isbn>`)
 	isbnMatches := isbnRegex.FindStringSubmatch(xmlContent)
 	if len(isbnMatches) > 1 {
-		isbn = strings.TrimSpace(isbnMatches[1])
+		// Декодируем HTML-сущности
+		isbn = strings.TrimSpace(html.UnescapeString(isbnMatches[1]))
 	}
 
 	// Извлекаем год
 	yearRegex := regexp.MustCompile(`<year[^>]*>(.*?)</year>`)
 	yearMatches := yearRegex.FindStringSubmatch(xmlContent)
 	if len(yearMatches) > 1 {
-		year = strings.TrimSpace(yearMatches[1])
+		// Декодируем HTML-сущности
+		year = strings.TrimSpace(html.UnescapeString(yearMatches[1]))
 	}
 
 	// Извлекаем издателя
 	publisherRegex := regexp.MustCompile(`<publisher[^>]*>(.*?)</publisher>`)
 	publisherMatches := publisherRegex.FindStringSubmatch(xmlContent)
 	if len(publisherMatches) > 1 {
-		publisher = strings.TrimSpace(publisherMatches[1])
+		// Декодируем HTML-сущности
+		publisher = strings.TrimSpace(html.UnescapeString(publisherMatches[1]))
 	}
 
 	// Извлекаем серию и номер
 	sequenceRegex := regexp.MustCompile(`<sequence[^>]*name\s*=\s*["']([^"']*)["'][^>]*number\s*=\s*["']([^"']*)["'][^>]*/?>`)
 	sequenceMatches := sequenceRegex.FindStringSubmatch(xmlContent)
 	if len(sequenceMatches) > 2 {
-		series = strings.TrimSpace(sequenceMatches[1])
-		seriesNumber = strings.TrimSpace(sequenceMatches[2])
+		// Декодируем HTML-сущности
+		series = strings.TrimSpace(html.UnescapeString(sequenceMatches[1]))
+		seriesNumber = strings.TrimSpace(html.UnescapeString(sequenceMatches[2]))
 	} else {
 		// Пробуем другой порядок атрибутов
 		sequenceRegex = regexp.MustCompile(`<sequence[^>]*number\s*=\s*["']([^"']*)["'][^>]*name\s*=\s*["']([^"']*)["'][^>]*/?>`)
 		sequenceMatches = sequenceRegex.FindStringSubmatch(xmlContent)
 		if len(sequenceMatches) > 2 {
-			seriesNumber = strings.TrimSpace(sequenceMatches[1])
-			series = strings.TrimSpace(sequenceMatches[2])
+			// Декодируем HTML-сущности
+			seriesNumber = strings.TrimSpace(html.UnescapeString(sequenceMatches[1]))
+			series = strings.TrimSpace(html.UnescapeString(sequenceMatches[2]))
 		} else {
 			// Пробуем найти только имя серии
 			sequenceRegex = regexp.MustCompile(`<sequence[^>]*name\s*=\s*["']([^"']*)["'][^>]*/?>`)
 			sequenceMatches = sequenceRegex.FindStringSubmatch(xmlContent)
 			if len(sequenceMatches) > 1 {
-				series = strings.TrimSpace(sequenceMatches[1])
+				// Декодируем HTML-сущности
+				series = strings.TrimSpace(html.UnescapeString(sequenceMatches[1]))
 			}
 		}
 	}

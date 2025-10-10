@@ -66,12 +66,48 @@ func (sm *SubscriptionManager) Start(ctx context.Context) (stop chan struct{}, e
 	}
 
 	// Получаем список релеев из конфигурации или используем значения по умолчанию
-	relays := []string{"wss://relay.damus.io", "wss://relay.primal.net"} // Значения по умолчанию
+	defaultRelays := []string{"wss://relay.damus.io"}
+	configRelays := []string{}
+
 	if sm.cfg != nil && sm.cfg.NostrRelays != "" {
-		relays = strings.Split(sm.cfg.NostrRelays, ",")
-		for i, r := range relays {
-			relays[i] = strings.TrimSpace(r)
+		configRelays = strings.Split(sm.cfg.NostrRelays, ",")
+		for i, r := range configRelays {
+			configRelays[i] = strings.TrimSpace(r)
 		}
+	}
+
+	// Создаём итоговый список релеев
+	relays := make([]string, 0)
+
+	// Добавляем defaultRelays, если их нет в configRelays
+	for _, defaultRelay := range defaultRelays {
+		exists := false
+		for _, configRelay := range configRelays {
+			if configRelay == defaultRelay {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			relays = append(relays, defaultRelay)
+		}
+	}
+
+	// Добавляем все релеи из конфига
+	relays = append(relays, configRelays...)
+
+	// Проверяем, есть ли "wss://relay.primal.net" в списке, и если нет - добавляем
+	primalRelay := "wss://relay.primal.net"
+	exists := false
+	for _, relay := range relays {
+		if relay == primalRelay {
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
+		relays = append(relays, primalRelay)
 	}
 
 	if cfg.Debug {
@@ -171,7 +207,9 @@ func (sm *SubscriptionManager) Start(ctx context.Context) (stop chan struct{}, e
 					continue // Повторяем попытку подключения
 				}
 
-				log.Printf("Подписка (kind 8698/8699) на %s", url)
+				if cfg.Debug {
+					log.Printf("Подписка (kind 8698/8699) на %s", url)
+				}
 
 				// Цикл получения событий
 			mainLoop:

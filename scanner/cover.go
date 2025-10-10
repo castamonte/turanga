@@ -124,7 +124,9 @@ func ExtractCover(filePath, fileType string, bookID int, fileHash string) (cover
 	// Всегда изменяем размер до высоты 600 пикселей, сохраняя пропорции
 	targetHeight := 600
 	img = imaging.Resize(img, 0, targetHeight, imaging.Lanczos) // Используем качественный фильтр
-	fmt.Printf("Обложка изменена до высоты %dpx\n", targetHeight)
+	if cfg.Debug {
+		log.Printf("Обложка изменена до высоты %dpx\n", targetHeight)
+	}
 
 	// Сохранение в JPEG
 	f, err := os.Create(coverPath)
@@ -141,7 +143,9 @@ func ExtractCover(filePath, fileType string, bookID int, fileHash string) (cover
 		return "", fmt.Errorf("не удалось сохранить обложку в файл %s: %w", coverPath, err)
 	}
 
-	fmt.Printf("Обложка извлечена, изменена и сохранена: %s\n", coverPath)
+	if cfg.Debug {
+		log.Printf("Обложка извлечена, изменена и сохранена: %s\n", coverPath)
+	}
 	return "/covers/" + coverFileName, nil
 }
 
@@ -994,9 +998,13 @@ func diagnoseDJVUFile(filePath string) {
 		cmd := exec.Command(djvudumpPath, filePath)
 		output, err := cmd.CombinedOutput()
 		if err == nil {
-			log.Printf("DJVU диагностика (djvudump): %s", string(output))
+			if cfg.Debug {
+				log.Printf("DJVU диагностика (djvudump): %s", string(output))
+			}
 		} else {
-			log.Printf("DJVU диагностика не удалась: %v, вывод: %s", err, string(output))
+			if cfg.Debug {
+				log.Printf("DJVU диагностика не удалась: %v, вывод: %s", err, string(output))
+			}
 		}
 	}
 

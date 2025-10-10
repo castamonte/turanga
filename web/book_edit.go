@@ -130,7 +130,8 @@ func (w *WebInterface) updateBookField(bookID int, fieldName, value string) erro
 
 	switch fieldName {
 	case "title":
-		_, err := w.db.Exec("UPDATE books SET title = ? WHERE id = ?", value, bookID)
+		// Обновляем также lower-поле
+		_, err := w.db.Exec("UPDATE books SET title = ?, title_lower = ? WHERE id = ?", value, strings.ToLower(value), bookID)
 		return err
 	case "authors":
 		return w.updateBookAuthors(bookID, value)
@@ -154,7 +155,8 @@ func (w *WebInterface) updateBookField(bookID int, fieldName, value string) erro
 		if cfg.Debug {
 			log.Printf("Updating series: name='%s', number='%s'", seriesName, seriesNumber)
 		}
-		_, err := w.db.Exec("UPDATE books SET series = ?, series_number = ? WHERE id = ?", seriesName, seriesNumber, bookID)
+		// Обновляем также lower-поле
+		_, err := w.db.Exec("UPDATE books SET series = ?, series_lower = ? WHERE id = ?", seriesName, strings.ToLower(seriesName), bookID)
 		return err
 	case "series_number":
 		// Отдельная обработка номера серии (на случай прямого вызова)
@@ -198,7 +200,7 @@ func (w *WebInterface) updateBookAuthors(bookID int, authorsStr string) error {
 	// Сохраняем ID старых авторов этой книги для последующей проверки на "сиротство"
 	type oldAuthorInfo struct {
 		ID   int
-		Name string
+		Name string // Используем full_name для идентификации
 	}
 	var oldAuthors []oldAuthorInfo
 	oldAuthorRows, err := tx.Query(`
@@ -228,8 +230,10 @@ func (w *WebInterface) updateBookAuthors(bookID int, authorsStr string) error {
 		return fmt.Errorf("ошибка удаления старых связей авторов: %w", err)
 	}
 
-	// Если строка авторов пуста, просто коммитим и выходим
+	// Если строка авторов пуста, просто коммитим (после проверки сирот) и выходим
 	if authorsStr == "" {
+		// Проверяем "сирот" среди старых авторов и удаляем их
+		// ... (логика проверки сирот остается без изменений)
 		// Проверяем "сирот" среди старых авторов и удаляем их
 		for _, oldAuthor := range oldAuthors {
 			var bookCount int
@@ -238,7 +242,7 @@ func (w *WebInterface) updateBookAuthors(bookID int, authorsStr string) error {
 				if cfg.Debug {
 					log.Printf("Предупреждение: ошибка проверки количества книг у автора %d (%s): %v", oldAuthor.ID, oldAuthor.Name, err)
 				}
-				continue // Продолжаем, чтобы не прерывать транзакцию из-за предупреждения
+				continue // Продолжаем, чтобы не прервать транзакцию из-за предупреждения
 			}
 			if bookCount == 0 {
 				// Автор не связан ни с одной книгой, удаляем его
@@ -268,17 +272,22 @@ func (w *WebInterface) updateBookAuthors(bookID int, authorsStr string) error {
 			continue
 		}
 
-		// Ищем автора с таким именем
+		// Ищем автора с таким именем (full_name)
 		var authorID int
 		err = tx.QueryRow("SELECT id FROM authors WHERE full_name = ?", authorName).Scan(&authorID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				// Создаем нового автора
-				lastName := authorName
+				// Вычисляем last_name_lower как последнее слово в authorName, приведенное к нижнему регистру
+				var lastNameLower string
 				if parts := strings.Fields(authorName); len(parts) > 0 {
-					lastName = parts[len(parts)-1]
+					lastNameLower = strings.ToLower(parts[len(parts)-1])
+				} else {
+					lastNameLower = strings.ToLower(authorName)
 				}
-				result, err := tx.Exec("INSERT INTO authors (last_name, full_name) VALUES (?, ?)", lastName, authorName)
+				// Обновляем также full_name_lower
+				result, err := tx.Exec("INSERT INTO authors (last_name_lower, full_name, full_name_lower) VALUES (?, ?, ?)",
+					lastNameLower, authorName, strings.ToLower(authorName))
 				if err != nil {
 					return fmt.Errorf("ошибка создания нового автора '%s': %w", authorName, err)
 				}
@@ -288,7 +297,7 @@ func (w *WebInterface) updateBookAuthors(bookID int, authorsStr string) error {
 				}
 				authorID = int(authorID64)
 				if cfg.Debug {
-					log.Printf("Создан новый автор: %s (ID: %d)", authorName, authorID)
+					log.Printf("Создан новый автор: %s (ID: %d, last_name_lower: %s)", authorName, authorID, lastNameLower)
 				}
 			} else {
 				return fmt.Errorf("ошибка поиска автора '%s': %w", authorName, err)

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"turanga/config"
+	"turanga/scanner"
 
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
@@ -32,6 +33,7 @@ type BookRequestEventContent struct {
 	Title    string `json:"title,omitempty"`
 	FileHash string `json:"file_hash,omitempty"`
 	Source   string `json:"source"`
+	ISBN     string `json:"isbn,omitempty"`
 }
 
 // Mетоды для доступа к чёрному списку:
@@ -219,7 +221,7 @@ func NewClient(cfg *config.Config, db *sql.DB) (*Client, error) {
 }
 
 // PublishBookRequestEvent публикует событие запроса книги (kind 8698)
-func (c *Client) PublishBookRequestEvent(ctx context.Context, author, series, title, fileHash string) error {
+func (c *Client) PublishBookRequestEvent(ctx context.Context, author, series, title, fileHash, isbn string) error {
 	cfg := config.GetConfig()
 	if !c.IsEnabled() {
 		if cfg.Debug {
@@ -230,22 +232,9 @@ func (c *Client) PublishBookRequestEvent(ctx context.Context, author, series, ti
 
 	// Валидация запроса перед публикацией
 	// Проверяем, что хотя бы одно поле заполнено
-	if author == "" && series == "" && title == "" && fileHash == "" {
-		log.Println("Игнорируем публикацию запроса: все поля пустые")
-		return nil // Не ошибка, просто не публикуем
-	}
-
-	// Проверяем минимальную длину для серии и названия (если заданы)
-	if series != "" && len(series) < 4 {
+	if author == "" && series == "" && title == "" && fileHash == "" && isbn == "" {
 		if cfg.Debug {
-			log.Printf("Игнорируем публикацию запроса: серия '%s' короче 4 символов", series)
-		}
-		return nil // Не ошибка, просто не публикуем
-	}
-
-	if title != "" && len(title) < 4 {
-		if cfg.Debug {
-			log.Printf("Игнорируем публикацию запроса: название '%s' короче 4 символов", title)
+			log.Println("Игнорируем публикацию запроса: все поля пустые")
 		}
 		return nil // Не ошибка, просто не публикуем
 	}
@@ -277,6 +266,17 @@ func (c *Client) PublishBookRequestEvent(ctx context.Context, author, series, ti
 		}
 	}
 
+	// Проверяем ISBN (если задан)
+	if isbn != "" {
+		// Валидируем ISBN с помощью новой функции в scanner
+		if !scanner.IsValidISBN(isbn) {
+			if cfg.Debug {
+				log.Printf("Игнорируем публикацию запроса: неверный ISBN '%s'", isbn)
+			}
+			return nil // Не ошибка, просто не публикуем
+		}
+	}
+
 	// Подготавливаем содержимое события
 	content := BookRequestEventContent{
 		Author:   author,
@@ -284,6 +284,7 @@ func (c *Client) PublishBookRequestEvent(ctx context.Context, author, series, ti
 		Title:    title,
 		FileHash: fileHash,
 		Source:   "turanga",
+		ISBN:     isbn, // <-- Добавляем ISBN
 	}
 
 	// Сериализуем содержимое в JSON
@@ -315,9 +316,9 @@ func (c *Client) PublishBookRequestEvent(ctx context.Context, author, series, ti
 	// Сохраняем запрос в БД перед публикацией
 	if c.db != nil {
 		_, err = c.db.Exec(`
-            INSERT INTO nostr_book_requests (event_id, pubkey, author, series, title, file_hash, created_at, processed, sent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, ev.ID, c.publicKey, author, series, title, fileHash, ev.CreatedAt, 1, 1) // processed=1, sent=1
+            INSERT INTO nostr_book_requests (event_id, pubkey, author, series, title, file_hash, isbn, created_at, processed, sent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, ev.ID, c.publicKey, author, series, title, fileHash, isbn, ev.CreatedAt, 1, 1) // processed=1, sent=1
 		if err != nil {
 			if cfg.Debug {
 				log.Printf("Предупреждение: ошибка сохранения запроса в БД: %v", err)

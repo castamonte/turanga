@@ -13,15 +13,18 @@
 <body data-author-id="{{.AuthorID}}">
 <div class="header">
     <h1 id="author-name-display">{{.AuthorName}}</h1>
-    <!-- Форма редактирования названия -->
+    <!-- Форма редактирования автора -->
     <div class="edit-field-form" style="display: none; margin-bottom: 0; margin-top: 10px;">
-        <input type="text" id="author-name-input" value="{{.AuthorName}}" class="edit-field-input" style="width: 300px; margin-right: 10px;">
+        <!-- Поле для full_name -->
+        <input type="text" id="author-name-input" value="{{.AuthorName}}" class="edit-field-input" style="flex-grow: 1; min-width: 200px; margin-right: 10px;" placeholder="Полное имя">
+        <!-- Поле для last_name_lower (фамилия для сортировки) -->
+        <input type="text" id="author-lastname-input" value="" class="edit-field-input" style="width: 150px; margin-right: 10px;" placeholder="Фамилия для сортировки" title="Фамилия для сортировки (в нижнем регистре)">
         <button type="button" id="save-author-btn" class="save-field-btn"><i class="fas fa-check"></i></button>
         <!-- Кнопка отмены удалена -->
     </div>
     <div>
         {{if .IsAuthenticated}}
-        <button type="button" id="edit-author-btn" class="admin-link" title="Редактировать автора">
+        <button type="button" id="edit-author-btn" class="admin-link" title="Редактировать автора" data-last-name-lower="{{.AuthorLastNameLower}}">
             <i class="fas fa-edit"></i>
         </button>
         {{end}}

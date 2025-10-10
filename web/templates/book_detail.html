@@ -17,7 +17,16 @@
             <i class="fas fa-trash-alt"></i>
         </button>
         {{end}}
-        <h1>{{.Book.Title}}</h1>
+        <div class="book-title-header">
+            {{if .Book.FileHash}}
+            <img src="/identicon/{{.Book.FileHash}}.png" 
+                 alt="Identicon" 
+                 class="book-title-identicon identicon-copy-btn" 
+                 title="xxHash: {{.Book.FileHash}}. Кликните, чтобы скопировать в буфер обмена."
+                 data-filehash="{{.Book.FileHash}}">
+            {{end}}
+            <h1>{{.Book.Title}}</h1>
+        </div>
         <div>
             {{if .IsAuthenticated}}
             <!-- Форма редактирования названия -->
@@ -66,9 +75,6 @@
                         {{upper .Type}}
                         {{if .FileSize}}
                         <span class="file-size">({{formatSize .FileSize}})</span>
-                        {{end}}
-                        {{if .FileHash}}
-                        <img src="/identicon/{{.FileHash}}.png" alt="Identicon" class="book-file-identicon" title="#{{.FileHash}}">
                         {{end}}
                     </a>
                     {{if $.Book.IPFS_CID}}

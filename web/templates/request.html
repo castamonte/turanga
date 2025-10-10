@@ -38,6 +38,13 @@
                 {{$requestDesc = print "Хеш: " .RequestInfo.FileHash}}
             {{end}}
         {{end}}
+        {{if .RequestInfo.ISBN}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " | ISBN: " .RequestInfo.ISBN}}
+            {{else}}
+                {{$requestDesc = print "ISBN: " .RequestInfo.ISBN}}
+            {{end}}
+        {{end}}
         
         <h1>{{$requestDesc}}</h1>
         <div>
@@ -81,6 +88,13 @@
                 {{$requestDesc = print $requestDesc " & Хеш = " .RequestInfo.FileHash}}
             {{else}}
                 {{$requestDesc = print "Хеш = " .RequestInfo.FileHash}}
+            {{end}}
+        {{end}}
+        {{if .RequestInfo.ISBN}}
+            {{if $requestDesc}}
+                {{$requestDesc = print $requestDesc " & ISBN = " .RequestInfo.ISBN}}
+            {{else}}
+                {{$requestDesc = print "ISBN = " .RequestInfo.ISBN}}
             {{end}}
         {{end}}
         
@@ -194,6 +208,10 @@
                     <div class="mb-3">
                         <label for="title" class="form-label">Название книги</label>
                         <input type="text" class="form-control" id="title" name="title" placeholder="Дети капитана Гранта">
+                    </div>
+                    <div class="mb-3">
+                        <label for="isbn" class="form-label">ISBN</label>
+                        <input type="text" class="form-control" id="isbn" name="isbn" placeholder="ISBN-10 или ISBN-13">
                     </div>
                     <div class="mb-3">
                         <label for="file_hash" class="form-label">xxhash файла</label>

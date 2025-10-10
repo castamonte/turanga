@@ -13,8 +13,6 @@ import (
 	"turanga/config"
 
 	xxhash "github.com/cespare/xxhash/v2"
-
-	//shell "github.com/ipfs/go-ipfs-api"
 	ipfsapi "github.com/ipfs/go-ipfs-api"
 )
 
@@ -42,195 +40,6 @@ var rootPath string
 // SetRootPath устанавливает корневую директорию приложения
 func SetRootPath(path string) {
 	rootPath = path
-}
-
-// sanitizeFilename очищает строку от недопустимых символов для имен файлов
-// Исправленная версия с акцентом на корректную обработку путей
-func sanitizeFilename(s string) string {
-	if s == "" {
-		return "unnamed"
-	}
-
-	// Разделяем путь на директорию и имя файла
-	dir := filepath.Dir(s)
-	baseName := filepath.Base(s)
-
-	if baseName == "." || baseName == ".." {
-		baseName = "unnamed"
-	}
-
-	// Очищаем только имя файла, не трогая структуру каталогов
-	// Заменяем недопустимые символы на подчеркивание
-	// Согласно спецификации FAT32/NTFS/Unix
-	invalidChars := []string{"<", ">", ":", "\"", "/", "\\", "|", "?", "*"}
-	for _, char := range invalidChars {
-		baseName = strings.ReplaceAll(baseName, char, "_")
-	}
-
-	// Заменяем управляющие символы (0-31)
-	for i := 0; i < 32; i++ {
-		baseName = strings.ReplaceAll(baseName, string(rune(i)), "_")
-	}
-
-	// Убираем точки и пробелы в конце имени файла
-	baseName = strings.TrimRight(baseName, ". ")
-
-	// Если после очистки имя пустое
-	if baseName == "" {
-		baseName = "unnamed"
-	}
-
-	// Ограничиваем длину имени файла (без пути)
-	ext := filepath.Ext(baseName)
-	nameWithoutExt := strings.TrimSuffix(baseName, ext)
-
-	// Ограничение длины имени файла без расширения
-	if len(nameWithoutExt) > 150 {
-		nameWithoutExt = nameWithoutExt[:150]
-	}
-
-	// Также ограничиваем общую длину имени файла
-	if len(nameWithoutExt+ext) > 200 {
-		nameWithoutExt = nameWithoutExt[:200-len(ext)]
-		if len(nameWithoutExt) <= 0 {
-			nameWithoutExt = "unnamed"
-		}
-	}
-
-	// Собираем очищенное имя файла
-	cleanedBaseName := nameWithoutExt + ext
-
-	// Если имя файла стало "пустым" или недопустимым, используем дефолтное
-	if cleanedBaseName == "" || cleanedBaseName == "." || cleanedBaseName == ".." {
-		cleanedBaseName = "unnamed" + ext
-	}
-
-	// Собираем обратно путь
-	result := filepath.Join(dir, cleanedBaseName)
-
-	// Финальная проверка на пустоту
-	if result == "" {
-		result = filepath.Join(".", "unnamed"+ext) // По крайней мере в текущей директории
-	}
-
-	return result
-}
-
-// renameBookFile переименовывает файл книги в соответствии с настройками конфигурации
-func renameBookFile(originalPath, authorName, title, fileType, fileHash string) (newPath string, err error) {
-	if cfg == nil {
-		// Если конфигурация не установлена, не переименовываем
-		fmt.Println("Конфигурация не установлена, пропускаю переименование")
-		return originalPath, nil
-	}
-
-	renameMode := cfg.GetRenameBook()
-
-	// Если "no", не переименовываем
-	if renameMode == "no" {
-		return originalPath, nil
-	}
-
-	// Исправленное определение расширения файла
-	// Учитываем специальные случаи, такие как .fb2.zip
-	var ext string
-	lowerOriginalPath := strings.ToLower(originalPath)
-	if strings.HasSuffix(lowerOriginalPath, ".fb2.zip") {
-		ext = ".fb2.zip"
-	} else {
-		// Для остальных файлов используем стандартное расширение
-		ext = filepath.Ext(originalPath)
-	}
-
-	// Получаем директорию оригинального файла
-	// ЭТО КРИТИЧЕСКИ ВАЖНО: сохраняем директорию
-	dir := filepath.Dir(originalPath)
-
-	var newName string
-	switch renameMode {
-	case "autit":
-		// Формат: Имя_Автора-Название_книги.ext
-		var sanitizedAuthor string
-
-		// Проверяем, есть ли несколько авторов (разделены запятыми или точкой с запятой)
-		if strings.Contains(authorName, ",") || strings.Contains(authorName, ";") {
-			// Несколько авторов - используем "Коллектив_авторов"
-			sanitizedAuthor = "Коллектив_авторов"
-		} else {
-			// Один автор - используем его имя
-			sanitizedAuthor = sanitizeFilename(filepath.Base(authorName))
-		}
-
-		// Очищаем только имя автора (если это не "Коллектив_авторов")
-		if sanitizedAuthor != "Коллектив_авторов" {
-			sanitizedAuthor = strings.ReplaceAll(sanitizedAuthor, " ", "_")
-		}
-
-		// Очищаем название книги
-		sanitizedTitle := sanitizeFilename(filepath.Base(title))
-		sanitizedTitle = strings.ReplaceAll(sanitizedTitle, " ", "_")
-
-		// Формируем имя файла
-		newName = fmt.Sprintf("%s-%s%s", sanitizedAuthor, sanitizedTitle, ext)
-	case "hash":
-		// Формат: xxhash.ext
-		newName = fmt.Sprintf("%s%s", fileHash, ext)
-	default:
-		// На случай, если валидация не сработала
-		fmt.Printf("Неизвестный режим переименования '%s', пропускаю\n", renameMode)
-		return originalPath, nil
-	}
-
-	// Формируем новый путь, объединяя оригинальную директорию с новым именем
-	// ЭТО КРИТИЧЕСКИ ВАЖНО: используем оригинальную директорию
-	newPath = filepath.Join(dir, newName)
-
-	// Очищаем только базовое имя нового файла, не трогая путь к директории
-	// Это дополнительная мера предосторожности
-	newPath = sanitizeFilename(newPath)
-
-	// Проверяем, отличается ли новый путь от старого
-	absOriginal, _ := filepath.Abs(originalPath)
-	absNew, _ := filepath.Abs(newPath)
-	if absOriginal == absNew {
-		return originalPath, nil
-	}
-
-	// Проверяем, существует ли файл с таким именем
-	if _, err := os.Stat(newPath); err == nil {
-		// Файл с таким именем уже существует
-		fmt.Printf("Файл с именем %s уже существует, пропускаю переименование %s\n", newName, originalPath)
-		return originalPath, nil
-	} else if !os.IsNotExist(err) {
-		// Другая ошибка при проверке существования файла
-		return originalPath, fmt.Errorf("ошибка проверки существования файла %s: %w", newPath, err)
-	}
-
-	// Переименовываем файл
-	err = os.Rename(originalPath, newPath)
-	if err != nil {
-		return originalPath, fmt.Errorf("ошибка переименования файла %s в %s: %w", originalPath, newPath, err)
-	}
-
-	fmt.Printf("Файл переименован: %s -> %s\n", originalPath, newPath)
-	return newPath, nil
-}
-
-// calculateFileHash вычисляет xxHash3 для файла
-func calculateFileHash(filePath string) (string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("не удалось открыть файл для хеширования %s: %w", filePath, err)
-	}
-	defer file.Close()
-	h := xxhash.New()
-	// Копируем содержимое файла в хешер
-	_, err = io.Copy(h, file)
-	if err != nil {
-		return "", fmt.Errorf("ошибка при чтении файла для хеширования %s: %w", filePath, err)
-	}
-	// Возвращаем хеш в виде строки
-	return fmt.Sprintf("%016x", h.Sum64()), nil
 }
 
 // ScanBooksDirectory сканирует каталог с книгами и добавляет в БД файлы, которых там нет
@@ -326,61 +135,30 @@ func ScanBooksDirectory() error {
 			if existingHashes[fileHash] {
 				// Файл уже есть в БД
 				skippedCount++
-				fmt.Printf("Файл уже в БД (пропущен): %s\n", path)
+				if cfg.Debug {
+					log.Printf("Файл уже в БД (пропущен): %s\n", path)
+				}
 				return nil
 			}
 
 			// Файл новый, обрабатываем его
-			fmt.Printf("Обрабатываю новый файл: %s\n", path)
+			if cfg.Debug {
+				log.Printf("Обрабатываю новый файл: %s\n", path)
+			}
 			processErr := processBookFile(path, info)
 			if processErr != nil {
 				fmt.Printf("Ошибка обработки файла %s: %v\n", path, processErr)
 				errorCount++
 			} else {
 				addedCount++
-				fmt.Printf("Файл добавлен в БД: %s\n", path)
-
-				// Генерируем обложку и аннотацию для нового файла
-				// Получаем ID новой книги из БД
-				var bookID int
-				var fileType sql.NullString
-				err = db.QueryRow("SELECT id, file_type FROM books WHERE file_hash = ?", fileHash).Scan(&bookID, &fileType)
-				if err != nil {
-					fmt.Printf("Ошибка получения ID новой книги (хеш: %s): %v\n", fileHash, err)
-				} else {
-					// Генерируем обложку
-					if fileType.Valid && fileType.String != "" {
-						coverURL, coverErr := ExtractCover(path, fileType.String, bookID, fileHash)
-						if coverErr != nil {
-							fmt.Printf("Предупреждение: ошибка извлечения обложки для новой книги ID %d: %v\n", bookID, coverErr)
-						} else if coverURL != "" {
-							fmt.Printf("Обложка извлечена: %s\n", coverURL)
-						}
-					}
-
-					// Генерируем аннотацию
-					_, _, _, annotation, _, _, _, _, _, metaErr := extractMetadata(path, info)
-					if metaErr != nil {
-						if cfg.Debug {
-							log.Printf("Предупреждение: ошибка извлечения метаданных для новой книги ID %d: %v", bookID, metaErr)
-						}
-						annotation = ""
-					} else {
-						if cfg.Debug {
-							log.Printf("Извлечена аннотация длиной: %d символов", len(annotation))
-						}
-					}
-					saveErr := saveAnnotationToFile(bookID, annotation, fileHash)
-					if saveErr != nil {
-						if cfg.Debug {
-							log.Printf("Предупреждение: ошибка сохранения аннотации для новой книги ID %d: %v", bookID, saveErr)
-						}
-					} else if annotation != "" {
-						if cfg.Debug {
-							log.Printf("Аннотация сохранена для книги ID %d", bookID)
-						}
-					}
+				if cfg.Debug {
+					log.Printf("Файл добавлен в БД: %s\n", path)
 				}
+				// Обработка завершена внутри processBookFile:
+				// - вставка в БД
+				// - извлечение и сохранение обложки
+				// - извлечение и сохранение аннотации
+				// - добавление в IPFS
 			}
 		}
 		return nil
@@ -395,15 +173,15 @@ func ScanBooksDirectory() error {
 }
 
 // processBookFile обрабатывает один файл книги
-// Всегда добавляет файл в IPFS и сохраняет CID.
 func processBookFile(filePath string, info os.FileInfo) error {
 	// Проверка хеша файла
 	fileHash, err := calculateFileHash(filePath)
 	if err != nil {
-		fmt.Printf("Предупреждение: Не удалось вычислить хеш для файла %s: %v. Пропускаю.\n", filePath, err)
+		if cfg.Debug {
+			log.Printf("⚠️ Не удалось вычислить хеш для файла %s: %v. Пропускаю.", filePath, err)
+		}
 		return nil
 	}
-
 	// Проверяем, существует ли файл с таким хешем в базе данных
 	// Теперь хеш и ipfs_cid хранятся прямо в таблице books
 	var existingBookID int
@@ -415,59 +193,64 @@ func processBookFile(filePath string, info os.FileInfo) error {
 		if existingIPFSCID.Valid && existingIPFSCID.String != "" {
 			cidInfo = fmt.Sprintf(", IPFS CID: %s", existingIPFSCID.String)
 		}
-		fmt.Printf("Файл %s (хеш: %s%s) уже существует в БД, ID %d (URL: %s). Пропускаю.\n", filePath, fileHash, cidInfo, existingBookID, existingFileURL.String)
+		if cfg.Debug {
+			log.Printf("Файл %s (хеш: %s%s) уже существует в БД, ID %d (URL: %s). Пропускаю.", filePath, fileHash, cidInfo, existingBookID, existingFileURL.String)
+		}
 		return nil // Прекращаем обработку этого файла
 	} else if err != sql.ErrNoRows {
 		// Произошла другая ошибка при запросе к БД
 		return fmt.Errorf("ошибка проверки существования файла по хешу %s: %w", fileHash, err)
 	}
-
 	// Сохраняем оригинальный путь для потенциального переименования
 	originalFilePath := filePath
-
 	// Определяем тип файла и извлекаем метаданные
 	fileType, authorName, title, annotation, isbn, year, publisher, series, seriesNumber, err := extractMetadata(filePath, info)
 	if err != nil {
-		fmt.Printf("Не удалось определить тип файла для %s: %v\n", filePath, err)
+		if cfg.Debug {
+			log.Printf("Не удалось определить тип файла для %s: %v", filePath, err)
+		}
 		return nil
 	}
-
 	// Если не удалось извлечь метаданные или нет названия, используем имя файла
 	if title == "" {
 		authorName, title = extractInfoFromFilename(info.Name())
-		fmt.Printf("Использую данные из имени файла для %s: Автор='%s', Название='%s'\n", filePath, authorName, title)
+		if cfg.Debug {
+			log.Printf("Использую данные из имени файла для %s: Автор='%s', Название='%s'", filePath, authorName, title)
+		}
 	}
-
 	// Проверка, что у нас есть хотя бы название
 	if title == "" {
-		fmt.Printf("Не удалось определить название для %s\n", filePath)
+		if cfg.Debug {
+			log.Printf("⚠️ Не удалось определить название для %s", filePath)
+		}
 		return nil // Не ошибка, просто пропускаем файл
 	}
-
 	// Переименовываем файл, если это указано в конфигурации
 	// Делаем это до вычисления относительного пути, чтобы путь был актуальным
 	filePath, err = renameBookFile(originalFilePath, authorName, title, fileType, fileHash)
 	if err != nil {
-		fmt.Printf("Предупреждение: ошибка переименования файла %s: %v\n", originalFilePath, err)
+		if cfg.Debug {
+			log.Printf("⚠️ ошибка переименования файла %s: %v", originalFilePath, err)
+		}
 		// Продолжаем обработку с оригинальным путем
 		filePath = originalFilePath
 	}
-
 	// Получаем абсолютный путь к файлу для хранения в БД
 	absoluteFilePath, err := filepath.Abs(filePath)
 	if err != nil {
 		// Если не удалось получить абсолютный путь, используем filePath как есть
 		absoluteFilePath = filePath
-		fmt.Printf("Предупреждение: Не удалось получить абсолютный путь для %s: %v\n", filePath, err)
+		if cfg.Debug {
+			log.Printf("⚠️ Не удалось получить абсолютный путь для %s: %v", filePath, err)
+		}
 	}
-
 	// Извлекаем относительный путь (уже с новым именем файла, если переименование произошло)
 	var relPath string
 	if rootPath != "" {
 		// Если задан rootPath, формируем относительный путь от него
 		relPath, err = filepath.Rel(rootPath, filePath)
 		if err != nil {
-			return fmt.Errorf("не удалось получить относительный путь от %s к %s: %w", rootPath, filePath, err)
+			return fmt.Errorf("⚠️ не удалось получить относительный путь от %s к %s: %w", rootPath, filePath, err)
 		}
 	} else {
 		// Если rootPath не задан, используем старую логику (для обратной совместимости)
@@ -476,7 +259,6 @@ func processBookFile(filePath string, info os.FileInfo) error {
 			return err
 		}
 	}
-
 	// Подготавливаем дату публикации
 	publishedAt := time.Now().UTC().Format("2006-01-02")
 	if year != "" && len(year) == 4 {
@@ -488,28 +270,25 @@ func processBookFile(filePath string, info os.FileInfo) error {
 		return fmt.Errorf("ошибка получения информации о файле %s: %w", filePath, err)
 	}
 	fileSize := fileInfo.Size()
-
 	// Создаем новую книгу сразу с информацией о файле
+	// Добавляем lower-поля
 	result, err := db.Exec(
 		`INSERT INTO books 
-		(title, series, series_number, published_at, isbn, year, publisher, file_url, file_type, file_hash, file_size, over18, ipfs_cid) 
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(title, series, series_number, published_at, isbn, year, publisher, file_url, file_type, file_hash, file_size, over18, ipfs_cid, title_lower, series_lower) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		title, series, seriesNumber, publishedAt, isbn, year, publisher, absoluteFilePath, fileType, fileHash, fileSize, false, nil, // false = не 18+, ipfs_cid = nil -> NULL в БД
+		strings.ToLower(title), strings.ToLower(series), // для lower-полей
 	)
-
 	if err != nil {
 		return fmt.Errorf("ошибка вставки новой книги '%s': %w", title, err)
 	}
-
 	lastInsertID, err := result.LastInsertId()
 	if err != nil {
 		return fmt.Errorf("ошибка получения ID новой книги '%s': %w", title, err)
 	}
 	bookID := int(lastInsertID)
-
 	// Добавляем файл в IPFS после успешной вставки в БД
 	ipfsCID := "" // Инициализируем переменную для CID
-
 	// Получаем конфигурацию (предполагается, что она доступна глобально)
 	if cfg != nil {
 		ipfsShell, shellErr := cfg.GetIPFSShell()
@@ -517,26 +296,33 @@ func processBookFile(filePath string, info os.FileInfo) error {
 			// Открываем файл для чтения
 			fileForIPFS, openErr := os.Open(filePath)
 			if openErr != nil {
-				fmt.Printf("Предупреждение: Не удалось открыть файл %s для добавления в IPFS: %v.\n", filePath, openErr)
+				if cfg.Debug {
+					log.Printf("⚠️ Не удалось открыть файл %s для добавления в IPFS: %v.", filePath, openErr)
+				}
 			} else {
 				// КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: Закрываем файл НЕМЕДЛЕННО после использования
 				func() {
 					defer fileForIPFS.Close() // Закрываем сразу после Add
-
 					// Добавляем файл в IPFS с --nocopy и --pin
 					cid, addErr := ipfsShell.Add(fileForIPFS, ipfsapi.Pin(true))
 					if addErr != nil {
 						// Не критично для основного процесса, логируем предупреждение
-						fmt.Printf("Предупреждение: Не удалось добавить файл %s в IPFS: %v.\n", filePath, addErr)
+						if cfg.Debug {
+							log.Printf("⚠️ Не удалось добавить файл %s в IPFS: %v.", filePath, addErr)
+						}
 						// Можно рассмотреть возврат ошибки, если IPFS критичен
 						// return fmt.Errorf("критическая ошибка добавления в IPFS: %w", addErr)
 					} else {
 						ipfsCID = cid
-						fmt.Printf("Файл %s успешно добавлен в IPFS с CID: %s\n", filePath, ipfsCID)
+						if cfg.Debug {
+							log.Printf("Файл %s успешно добавлен в IPFS с CID: %s", filePath, ipfsCID)
+						}
 						// Обновляем запись в БД с полученным CID
 						_, updateErr := db.Exec("UPDATE books SET ipfs_cid = ? WHERE id = ?", ipfsCID, bookID)
 						if updateErr != nil {
-							fmt.Printf("Предупреждение: Не удалось сохранить IPFS CID в БД для книги ID %d: %v.\n", bookID, updateErr)
+							if cfg.Debug {
+								log.Printf("⚠️ Не удалось сохранить IPFS CID в БД для книги ID %d: %v.", bookID, updateErr)
+							}
 							// Не возвращаем ошибку, чтобы не прерывать основной процесс
 						}
 					}
@@ -544,38 +330,43 @@ func processBookFile(filePath string, info os.FileInfo) error {
 			}
 		}
 	} else {
-		fmt.Println("Предупреждение: Конфигурация не установлена. Продолжаю без добавления в IPFS.")
+		if cfg.Debug {
+			log.Println("⚠️ Конфигурация не установлена. Продолжаю без добавления в IPFS.")
+		}
 	}
-
 	// После успешной вставки книги сохраняем аннотацию в файл:
 	err = saveAnnotationToFile(bookID, annotation, fileHash)
 	if err != nil {
-		fmt.Printf("Предупреждение: ошибка сохранения аннотации для книги %d: %v\n", bookID, err)
+		if cfg.Debug {
+			log.Printf("⚠️ ошибка сохранения аннотации для книги %d: %v", bookID, err)
+		}
 		// Не прерываем процесс из-за ошибки аннотации
 	}
-
-	log.Printf("Добавлена новая книга: %s (ID: %d)", title, bookID)
-	log.Printf("  ISBN: %s, Год: %s, Издатель: %s, Серия: %s", isbn, year, publisher, series)
-	log.Printf("  Файл: %s (%s), хеш: %s", relPath, fileType, fileHash)
-	if ipfsCID != "" {
-		log.Printf("  IPFS CID: %s", ipfsCID)
+	if cfg.Debug {
+		log.Printf("Добавлена новая книга: %s (ID: %d)", title, bookID)
+		log.Printf("  ISBN: %s, Год: %s, Издатель: %s, Серия: %s", isbn, year, publisher, series)
+		log.Printf("  Файл: %s (%s), хеш: %s", relPath, fileType, fileHash)
+		if ipfsCID != "" {
+			log.Printf("  IPFS CID: %s", ipfsCID)
+		}
 	}
-
 	// Обрабатываем авторов
 	err = upsertAuthorsAndLink(bookID, authorName)
 	if err != nil {
-		fmt.Printf("Предупреждение: ошибка обработки авторов для %s: %v\n", filePath, err)
+		if cfg.Debug {
+			log.Printf("⚠️ ошибка обработки авторов для %s: %v", filePath, err)
+		}
 		// Не прерываем процесс из-за ошибки авторов
 	}
-
 	// Извлекаем обложку
 	err = extractAndSaveCover(filePath, fileType, bookID, fileHash)
 	if err != nil {
-		fmt.Printf("Предупреждение: не удалось извлечь обложку для %s: %v\n", filePath, err)
+		if cfg.Debug {
+			log.Printf("⚠️ не удалось извлечь обложку для %s: %v", filePath, err)
+		}
 		// Не прерываем процесс из-за ошибки обложки
 	}
-
-	fmt.Printf("Успешно обработан файл: %s (Название: '%s', Автор: '%s', Хеш: %s)\n", filePath, title, authorName, fileHash)
+	log.Printf("✅ %s (Название: '%s', Автор: '%s', Хеш: %s)", filePath, title, authorName, fileHash)
 	return nil
 }
 
@@ -585,7 +376,9 @@ func extractAndSaveCover(filePath, fileType string, bookID int, fileHash string)
 	coverURL, err := ExtractCover(filePath, fileType, bookID, fileHash)
 	if err == nil && coverURL != "" {
 		// Не сохраняем coverURL в БД, просто логируем
-		fmt.Printf("Добавлена обложка для книги %d: %s\n", bookID, filepath.Base(coverURL))
+		if cfg.Debug {
+			log.Printf("Добавлена обложка для книги %d: %s\n", bookID, filepath.Base(coverURL))
+		}
 	}
 	return err
 }
@@ -644,7 +437,7 @@ func extractMetadata(filePath string, info os.FileInfo) (fileType, author, title
 		}
 	case ".djvu":
 		fileType = "djvu"
-		author, title, err = ExtractDJVUMetadata(filePath)
+		author, title, err = ExtractDJVUMetadata(filePath, cfg)
 		if err != nil {
 			if cfg.Debug {
 				log.Printf("DJVU ошибка (метаданные): %v для %s", err, filePath)
@@ -717,208 +510,138 @@ func extractInfoFromFilename(filename string) (author, title string) {
 }
 
 // upsertAuthorsAndLink создает авторов (если они не существуют) и связывает их с книгой
-// Эта функция остаётся почти без изменений, так как логика работы с авторами не меняется
+// Использует full_name_lower и last_name_lower для поиска и создания авторов.
 func upsertAuthorsAndLink(bookID int, authorNamesStr string) error {
+	cfg := config.GetConfig() // Получаем конфиг для логов/дебага
+
 	// Разделяем строку авторов по запятым (если их несколько)
 	authorNames := strings.Split(authorNamesStr, ",")
 	var authors []Author
+
 	for _, authorName := range authorNames {
 		trimmedName := strings.TrimSpace(authorName)
 		if trimmedName != "" {
-			// Разбираем имя автора на части
-			// Это резервный способ, если парсеры метаданных не предоставили FirstName/LastName
-			// или если имя пришло из extractInfoFromFilename
-			firstName := ""
-			lastName := ""
-			fullName := trimmedName // По умолчанию fullName - это всё имя
-			// Простая эвристика: последнее слово - фамилия, остальное - имя
-			// Это соответствует требованию для DJVU/PDF и служит запасным вариантом
-			parts := strings.Fields(trimmedName)
-			if len(parts) > 1 {
-				lastName = parts[len(parts)-1]                      // Последнее слово
-				firstName = strings.Join(parts[:len(parts)-1], " ") // Остальные слова
-				// Формируем FullName без MiddleName, как указано в запросе
-				if firstName != "" {
-					fullName = firstName + " " + lastName
+			// Очищаем имя от лишних пробелов
+			cleanedName := strings.Join(strings.Fields(trimmedName), " ")
+
+			if cleanedName != "" {
+				// Вычисляем last_name_lower как последнее слово в cleanedName, приведенное к нижнему регистру
+				var lastNameLower string
+				if parts := strings.Fields(cleanedName); len(parts) > 0 {
+					lastNameLower = strings.ToLower(parts[len(parts)-1])
 				} else {
-					fullName = lastName
+					lastNameLower = strings.ToLower(cleanedName)
 				}
-			} else if len(parts) == 1 {
-				lastName = parts[0]
-				fullName = lastName
+
+				// Формируем full_name_lower - ни к чему, надёжнее вычислить заново
+				//fullNameLower := strings.ToLower(cleanedName)
+
+				// Добавляем в список авторов для обработки
+				// Используем LastName для хранения lastNameLower (для совместимости с моделью Author,
+				// хотя поле будет содержать значение из last_name_lower БД)
+				// FullName хранит оригинальное очищенное имя
+				authors = append(authors, Author{
+					LastName: lastNameLower, // Храним lastNameLower в поле LastName для использования в сортировке/поиске
+					FullName: cleanedName,   // Храним оригинальное очищенное имя для отображения и поиска по full_name
+				})
 			}
-			// Если parts пустой, firstName, lastName и fullName останутся пустыми
-			authors = append(authors, Author{
-				LastName: lastName,
-				FullName: fullName, // Используем сформированное имя без MiddleName
-			})
 		}
 	}
+
 	// Если авторы не указаны, добавляем "Неизвестный автор"
 	if len(authors) == 0 {
+		// Для "Неизвестный автор" last_name_lower будет "неизвестный"
 		authors = append(authors, Author{
-			LastName: "Неизвестный",       // Для сортировки используем "Неизвестный"
+			LastName: "неизвестный",       // last_name_lower для сортировки
 			FullName: "Неизвестный автор", // Для отображения
 		})
 	}
+
 	// Добавляем авторов и связи
 	for _, author := range authors {
-		// Проверяем, существует ли уже такой автор по FullName
-		// (так как FullName теперь формируется без MiddleName, это должно быть более стабильно)
+		// Проверяем, существует ли уже такой автор по FullName (регистрозависимо, как раньше)
+		// или по full_name_lower (регистронезависимо, новая логика)
+		// Сначала пробуем найти по full_name (старая логика для совместимости)
 		var authorID int
 		err := db.QueryRow("SELECT id FROM authors WHERE full_name = ?", author.FullName).Scan(&authorID)
+
 		if err == sql.ErrNoRows {
-			// Создаем нового автора
-			_, err := db.Exec(
-				"INSERT OR IGNORE INTO authors (last_name, full_name) VALUES (?, ?)",
-				author.LastName, author.FullName,
-			)
-			if err != nil {
-				fmt.Printf("Ошибка создания автора: %v\n", err)
+			// Не найден по full_name, пробуем найти по full_name_lower (новая логика)
+			err = db.QueryRow("SELECT id FROM authors WHERE full_name_lower = ?", strings.ToLower(author.FullName)).Scan(&authorID)
+
+			if err == sql.ErrNoRows {
+				// Автор не найден ни по full_name, ни по full_name_lower - создаем нового
+				// Вычисляем last_name_lower для нового автора
+				var lastNameLower string
+				if parts := strings.Fields(author.FullName); len(parts) > 0 {
+					lastNameLower = strings.ToLower(parts[len(parts)-1])
+				} else {
+					lastNameLower = strings.ToLower(author.FullName)
+				}
+
+				_, err := db.Exec(
+					"INSERT OR IGNORE INTO authors (last_name_lower, full_name, full_name_lower) VALUES (?, ?, ?)",
+					lastNameLower, author.FullName, strings.ToLower(author.FullName),
+				)
+				if err != nil {
+					if cfg.Debug {
+						log.Printf("Ошибка создания автора '%s': %v", author.FullName, err)
+					}
+					continue
+				}
+
+				// Получаем ID вставленного автора по full_name_lower
+				err = db.QueryRow("SELECT id FROM authors WHERE full_name_lower = ?", strings.ToLower(author.FullName)).Scan(&authorID)
+				if err != nil {
+					if cfg.Debug {
+						log.Printf("Ошибка получения ID автора '%s' после вставки: %v", author.FullName, err)
+					}
+					continue
+				}
+
+				if cfg.Debug {
+					log.Printf("Создан новый автор: %s (ID: %d)", author.FullName, authorID)
+				}
+
+			} else if err != nil {
+				// Другая ошибка при поиске по full_name_lower
+				if cfg.Debug {
+					log.Printf("Ошибка проверки автора по full_name_lower '%s': %v", author.FullName, err)
+				}
 				continue
-			}
-			// Получаем ID вставленного или существующего автора
-			err = db.QueryRow("SELECT id FROM authors WHERE full_name = ?", author.FullName).Scan(&authorID)
-			if err != nil {
-				fmt.Printf("Ошибка получения ID автора: %v\n", err)
-				continue
+			} else {
+				// Найден по full_name_lower
+				if cfg.Debug {
+					log.Printf("Найден существующий автор по full_name_lower '%s' (ID: %d)", author.FullName, authorID)
+				}
 			}
 		} else if err != nil {
-			fmt.Printf("Ошибка проверки автора: %v\n", err)
+			// Другая ошибка при поиске по full_name
+			if cfg.Debug {
+				log.Printf("Ошибка проверки автора по full_name '%s': %v", author.FullName, err)
+			}
 			continue
+		} else {
+			// Найден по full_name
+			if cfg.Debug {
+				log.Printf("Найден существующий автор по full_name '%s' (ID: %d)", author.FullName, authorID)
+			}
 		}
+
 		// Связываем книгу с автором (если связь еще не существует)
 		_, err = db.Exec("INSERT OR IGNORE INTO book_authors (book_id, author_id) VALUES (?, ?)", bookID, authorID)
 		if err != nil {
-			fmt.Printf("Ошибка связи книги с автором: %v\n", err)
+			if cfg.Debug {
+				log.Printf("Ошибка связи книги %d с автором %d (%s): %v", bookID, authorID, author.FullName, err)
+			}
 			continue
 		} else {
-			fmt.Printf("  Автор: %s (Фамилия для сортировки: '%s')\n", author.FullName, author.LastName)
-		}
-	}
-	return nil
-}
-
-// CleanupMissingFiles проверяет наличие файлов, записанных в БД.
-// Если файлы отсутствуют, удаляет соответствующие записи из БД и файлы обложек.
-func CleanupMissingFiles() error {
-	if db == nil {
-		return fmt.Errorf("база данных не инициализирована")
-	}
-
-	fmt.Println("Начинаю проверку на наличие файлов...")
-
-	// 1. Получаем все записи из таблицы books с хешами файлов
-	rows, err := db.Query(`
-        SELECT id, file_url, file_hash 
-        FROM books 
-        WHERE file_hash IS NOT NULL AND file_hash != ''
-    `)
-	if err != nil {
-		return fmt.Errorf("ошибка получения списка файлов из БД: %w", err)
-	}
-	defer rows.Close()
-
-	// Счетчики для отчета
-	var totalChecked int
-	var deletedBooks int
-	var booksToDelete []int
-	var fileHashes []string // Собираем хеши для очистки обложек
-
-	for rows.Next() {
-		totalChecked++
-		var bookID int
-		var fileURL, fileHash sql.NullString
-
-		err := rows.Scan(&bookID, &fileURL, &fileHash)
-		if err != nil {
-			fmt.Printf("Ошибка сканирования строки книги (ID: %d): %v\n", bookID, err)
-			continue
-		}
-
-		// Проверяем, задан ли путь к файлу
-		if !fileURL.Valid || fileURL.String == "" {
-			fmt.Printf("Пропускаю книгу ID %d: путь к файлу не задан\n", bookID)
-			continue
-		}
-
-		// В БД теперь хранятся абсолютные пути, используем их напрямую
-		filePath := fileURL.String
-
-		// Проверяем существование файла
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			fmt.Printf("Файл не найден: %s (Книга ID: %d). Планирую к удалению.\n", filePath, bookID)
-			booksToDelete = append(booksToDelete, bookID)
-		} else if err != nil {
-			fmt.Printf("Ошибка проверки файла %s (Книга ID: %d): %v\n", filePath, bookID, err)
-		}
-
-		// Собираем хеши для очистки обложек
-		if fileHash.Valid && fileHash.String != "" {
-			fileHashes = append(fileHashes, fileHash.String)
-		}
-	}
-
-	// Проверяем ошибки после итерации
-	if err = rows.Err(); err != nil {
-		return fmt.Errorf("ошибка итерации по результатам запроса: %w", err)
-	}
-
-	// 2. Удаляем записи из БД и файлы обложек, если есть что удалять
-	if len(booksToDelete) > 0 {
-		fmt.Printf("Найдено %d книг для удаления.\n", len(booksToDelete))
-
-		// Начинаем транзакцию для обеспечения целостности данных
-		tx, err := db.Begin()
-		if err != nil {
-			return fmt.Errorf("ошибка начала транзакции: %w", err)
-		}
-		// Отложенный откат транзакции в случае ошибки
-		defer func() {
-			if err != nil {
-				_ = tx.Rollback()
-				fmt.Println("Транзакция отменена из-за ошибки.")
+			if cfg.Debug {
+				log.Printf("  Автор связан: %s (Фамилия для сортировки: '%s')", author.FullName, author.LastName)
 			}
-		}()
-
-		// Создаем placeholder'ы для IN-запроса
-		placeholders := make([]string, len(booksToDelete))
-		args := make([]interface{}, len(booksToDelete))
-		for i, id := range booksToDelete {
-			placeholders[i] = "?"
-			args[i] = id
 		}
-		placeholderStr := strings.Join(placeholders, ",")
-
-		// Удаляем книги. CASCADE DELETE в схеме БД должен автоматически удалить
-		// связанные записи из book_authors и book_tags.
-		query := fmt.Sprintf("DELETE FROM books WHERE id IN (%s)", placeholderStr)
-		_, err = tx.Exec(query, args...)
-		if err != nil {
-			return fmt.Errorf("ошибка удаления книг из БД: %w", err)
-		}
-		deletedBooks = len(booksToDelete)
-
-		// Фиксируем транзакцию
-		err = tx.Commit()
-		if err != nil {
-			return fmt.Errorf("ошибка фиксации транзакции: %w", err)
-		}
-		fmt.Printf("Удалено %d записей из БД.\n", deletedBooks)
-
-		// 3. Удаляем файлы обложек
-		cleanupUnusedCovers(fileHashes)
-
-		// 4. Очищаем неиспользуемые данные (авторы, теги)
-		//CleanupOrphanedData()
-
-		return nil
-
-	} else {
-		fmt.Println("Все файлы из БД существуют на диске.")
 	}
 
-	fmt.Printf("Проверка завершена. Проверено: %d, Удалено записей: %d.\n", totalChecked, deletedBooks)
 	return nil
 }
 
@@ -971,823 +694,26 @@ func saveAnnotationToFile(bookID int, annotation, fileHash string) error {
 	return nil
 }
 
-// CleanupMissingAnnotations удаляет файлы аннотаций, которые больше не связаны ни с одной книгой в БД
-func CleanupMissingAnnotations() error {
-	cfg := config.GetConfig() // Получаем конфиг для логов/дебага
-	if db == nil {
-		return fmt.Errorf("база данных не инициализирована")
-	}
-
-	// ВСЕГДА определяем каталог notes относительно rootPath (каталога запуска)
-	// игнорируя books_dir для веб-совместимости и согласованности
-	var notesDir string
-	if rootPath != "" {
-		notesDir = filepath.Join(rootPath, "notes")
-	} else {
-		notesDir = "./notes"
-	}
-
-	// Проверяем существование каталога
-	if _, err := os.Stat(notesDir); os.IsNotExist(err) {
-		if cfg.Debug {
-			log.Println("Каталог notes не найден, очистка не требуется")
-		}
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("ошибка проверки каталога notes %s: %w", notesDir, err)
-	}
-
-	if cfg.Debug {
-		log.Println("Начинаю проверку файлов аннотаций...")
-	}
-
-	// Получаем все хеши файлов из БД
-	rows, err := db.Query("SELECT file_hash FROM books WHERE file_hash IS NOT NULL AND file_hash != ''")
-	if err != nil {
-		return fmt.Errorf("ошибка получения хешей из БД: %w", err)
-	}
-	defer rows.Close()
-
-	// Создаем множество существующих хешей
-	existingHashes := make(map[string]bool)
-	for rows.Next() {
-		var fileHash string
-		if err := rows.Scan(&fileHash); err == nil {
-			existingHashes[fileHash] = true
-		}
-	}
-	// Проверяем ошибки после итерации по результатам запроса
-	if err = rows.Err(); err != nil {
-		return fmt.Errorf("ошибка итерации по результатам запроса: %w", err)
-	}
-
-	// Сканируем каталог notes
-	files, err := os.ReadDir(notesDir)
-	if err != nil {
-		return fmt.Errorf("ошибка чтения каталога notes %s: %w", notesDir, err)
-	}
-
-	deletedFiles := 0
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		// Получаем имя файла без расширения
-		fileName := file.Name()
-		if filepath.Ext(fileName) == ".txt" {
-			fileHash := strings.TrimSuffix(fileName, ".txt")
-
-			// Если хеша нет в БД, удаляем файл
-			if !existingHashes[fileHash] {
-				filePath := filepath.Join(notesDir, file.Name())
-				if err := os.Remove(filePath); err != nil {
-					if cfg.Debug {
-						log.Printf("Ошибка удаления файла аннотации %s: %v", filePath, err)
-					}
-				} else {
-					if cfg.Debug {
-						log.Printf("Удален файл аннотации: %s", filePath)
-					}
-					deletedFiles++
-				}
-			}
-		}
-	}
-
-	if cfg.Debug {
-		log.Printf("Очистка аннотаций завершена. Удалено файлов: %d", deletedFiles)
-	}
-	return nil
+// GetConfig возвращает текущую конфигурацию приложения
+func GetConfig() *config.Config {
+	return cfg // Возвращает глобальную переменную cfg пакета scanner
 }
 
-// cleanupUnusedCovers для очистки неиспользуемых обложек
-func cleanupUnusedCovers(usedHashes []string) {
-	coversDir := "./covers"
-	if cfg != nil && cfg.BooksDir != "" {
-		coversDir = filepath.Join(filepath.Dir(cfg.BooksDir), "covers")
-	}
-
-	// Проверяем существование каталога
-	if _, err := os.Stat(coversDir); os.IsNotExist(err) {
-		return
-	}
-
-	// Создаем множество используемых хешей
-	usedHashesMap := make(map[string]bool)
-	for _, hash := range usedHashes {
-		usedHashesMap[hash] = true
-	}
-
-	// Сканируем каталог covers
-	files, err := os.ReadDir(coversDir)
+// calculateFileHash вычисляет xxHash3 для файла
+func calculateFileHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Printf("Ошибка чтения каталога covers: %v\n", err)
-		return
+		return "", fmt.Errorf("не удалось открыть файл для хеширования %s: %w", filePath, err)
 	}
-
-	deletedCovers := 0
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		// Получаем имя файла без расширения
-		fileName := file.Name()
-		ext := filepath.Ext(fileName)
-		fileHash := strings.TrimSuffix(fileName, ext)
-
-		// Если хеша нет в используемых, удаляем файл
-		if !usedHashesMap[fileHash] {
-			filePath := filepath.Join(coversDir, file.Name())
-			if err := os.Remove(filePath); err != nil {
-				fmt.Printf("Ошибка удаления файла обложки %s: %v\n", filePath, err)
-			} else {
-				fmt.Printf("Удален файл обложки: %s\n", filePath)
-				deletedCovers++
-			}
-		}
-	}
-
-	fmt.Printf("Удалено неиспользуемых обложек: %d\n", deletedCovers)
-}
-
-// CleanupOrphanedData очищает неиспользуемые авторы и теги из базы данных
-func CleanupOrphanedData() error {
-	if db == nil {
-		return fmt.Errorf("база данных не инициализирована")
-	}
-
-	fmt.Println("Начинаю очистку неиспользуемых данных...")
-
-	// Очищаем неиспользуемых авторов (которые не связаны ни с одной книгой)
-	deletedAuthors, err := cleanupOrphanedAuthors()
+	defer file.Close()
+	h := xxhash.New()
+	// Копируем содержимое файла в хешер
+	_, err = io.Copy(h, file)
 	if err != nil {
-		fmt.Printf("Ошибка очистки авторов: %v\n", err)
-	} else {
-		fmt.Printf("Удалено неиспользуемых авторов: %d\n", deletedAuthors)
+		return "", fmt.Errorf("ошибка при чтении файла для хеширования %s: %w", filePath, err)
 	}
-
-	// Очищаем неиспользуемые теги (которые не связаны ни с одной книгой)
-	deletedTags, err := cleanupOrphanedTags()
-	if err != nil {
-		fmt.Printf("Ошибка очистки тегов: %v\n", err)
-	} else {
-		fmt.Printf("Удалено неиспользуемых тегов: %d\n", deletedTags)
-	}
-
-	// Примечание: серии не очищаются, так как они хранятся в таблице books
-	// и автоматически становятся "непривязанными" при удалении книг.
-
-	fmt.Println("Очистка неиспользуемых данных завершена.")
-	return nil
-}
-
-// cleanupOrphanedAuthors удаляет авторов, которые не связаны ни с одной книгой
-func cleanupOrphanedAuthors() (int64, error) {
-	cfg := config.GetConfig()
-
-	// Начинаем транзакцию
-	tx, err := db.Begin()
-	if err != nil {
-		return 0, fmt.Errorf("ошибка начала транзакции: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Сначала удаляем "сиротские" записи в book_authors, которые ссылаются на несуществующие книги
-	cleanupResult, err := tx.Exec(`
-        DELETE FROM book_authors 
-        WHERE book_id NOT IN (
-            SELECT id FROM books
-        )
-    `)
-	if err != nil {
-		return 0, fmt.Errorf("ошибка очистки сиротских записей book_authors: %w", err)
-	}
-
-	cleanupCount, err := cleanupResult.RowsAffected()
-	if err != nil {
-		if cfg.Debug {
-			log.Printf("Предупреждение: не удалось получить количество очищенных записей book_authors: %v", err)
-		}
-	} else if cleanupCount > 0 {
-		if cfg.Debug {
-			log.Printf("Очищено %d сиротских записей book_authors", cleanupCount)
-		}
-	}
-
-	// Затем удаляем авторов, которые не связаны ни с одной книгой
-	result, err := tx.Exec(`
-        DELETE FROM authors 
-        WHERE id NOT IN (
-            SELECT DISTINCT author_id 
-            FROM book_authors 
-            WHERE author_id IS NOT NULL
-        )
-    `)
-	if err != nil {
-		return 0, fmt.Errorf("ошибка удаления неиспользуемых авторов: %w", err)
-	}
-
-	deletedCount, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("ошибка получения количества удаленных авторов: %w", err)
-	}
-
-	// Коммитим транзакцию
-	err = tx.Commit()
-	if err != nil {
-		return 0, fmt.Errorf("ошибка коммита транзакции: %w", err)
-	}
-
-	if deletedCount > 0 {
-		log.Printf("Удалено %d неиспользуемых авторов", deletedCount)
-	}
-
-	return deletedCount, nil
-}
-
-// cleanupOrphanedTags удаляет теги, которые не связаны ни с одной книгой
-func cleanupOrphanedTags() (int64, error) {
-	// Удаляем теги, у которых нет связей в таблице book_tags
-	result, err := db.Exec(`
-        DELETE FROM tags 
-        WHERE id NOT IN (
-            SELECT DISTINCT tag_id 
-            FROM book_tags 
-            WHERE tag_id IS NOT NULL
-        )
-    `)
-	if err != nil {
-		return 0, fmt.Errorf("ошибка удаления неиспользуемых тегов: %w", err)
-	}
-
-	deletedCount, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("ошибка получения количества удаленных тегов: %w", err)
-	}
-
-	return deletedCount, nil
-}
-
-// GenerateMissingCovers создает недостающие обложки для всех книг в БД
-func GenerateMissingCovers() error {
-	cfg := config.GetConfig()
-	if db == nil {
-		return fmt.Errorf("база данных не инициализирована")
-	}
-	// ВСЕГДА определяем каталог covers относительно rootPath (каталога запуска)
-	// игнорируя books_dir для веб-совместимости
-	var coversDir string
-	if rootPath != "" {
-		coversDir = filepath.Join(rootPath, "covers")
-	} else {
-		coversDir = "./covers"
-	}
-
-	// Проверяем существование каталога covers
-	if _, err := os.Stat(coversDir); os.IsNotExist(err) {
-		// Если каталога нет, создаем его
-		if err := os.MkdirAll(coversDir, 0755); err != nil {
-			return fmt.Errorf("ошибка создания каталога covers: %w", err)
-		}
-		if cfg.Debug {
-			log.Printf("Каталог covers создан: %s", coversDir)
-		}
-	} else if err != nil {
-		return fmt.Errorf("ошибка проверки каталога covers: %w", err)
-	}
-
-	if cfg.Debug {
-		log.Println("Начинаю генерацию недостающих обложек...")
-	}
-
-	// Получаем все книги из БД, у которых есть file_hash (не NULL и не пустая строка)
-	// file_hash необходим для формирования имени файла обложки и её поиска
-	rows, err := db.Query(`
-		SELECT id, file_url, file_type, file_hash 
-		FROM books 
-		WHERE file_hash IS NOT NULL AND file_hash != '' AND file_url IS NOT NULL AND file_url != '' AND file_type IS NOT NULL AND file_type != ''
-	`)
-	if err != nil {
-		return fmt.Errorf("ошибка получения списка книг из БД: %w", err)
-	}
-	defer rows.Close()
-
-	processedCount := 0
-	generatedCount := 0
-	skippedNoHashCount := 0
-	skippedNoFileCount := 0
-	skippedExistsCount := 0
-	errorCount := 0
-
-	for rows.Next() {
-		processedCount++
-		var bookID int
-		var fileURL, fileType, fileHash sql.NullString
-
-		err := rows.Scan(&bookID, &fileURL, &fileType, &fileHash)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка сканирования строки книги (ID: %d): %v", bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Проверяем, есть ли file_hash
-		if !fileHash.Valid || fileHash.String == "" {
-			if cfg.Debug {
-				log.Printf("Пропускаю книгу ID %d: отсутствует file_hash", bookID)
-			}
-			skippedNoHashCount++
-			continue
-		}
-
-		// Проверяем, есть ли file_url
-		if !fileURL.Valid || fileURL.String == "" {
-			if cfg.Debug {
-				log.Printf("Пропускаю книгу ID %d: отсутствует file_url", bookID)
-			}
-			skippedNoFileCount++
-			continue
-		}
-
-		// Проверяем, есть ли file_type
-		if !fileType.Valid || fileType.String == "" {
-			if cfg.Debug {
-				log.Printf("Пропускаю книгу ID %d: отсутствует file_type", bookID)
-			}
-			skippedNoFileCount++
-			continue
-		}
-
-		// Формируем ожидаемое имя файла обложки
-		coverFileName := fileHash.String + ".jpg" // ExtractCover всегда сохраняет как .jpg
-		coverFilePath := filepath.Join(coversDir, coverFileName)
-
-		// Проверяем, существует ли файл обложки
-		if _, err := os.Stat(coverFilePath); err == nil {
-			// Файл обложки уже существует
-			if cfg.Debug {
-				log.Printf("Обложка для книги ID %d (хеш: %s) уже существует: %s", bookID, fileHash.String, coverFilePath)
-			}
-			skippedExistsCount++
-			continue
-		} else if !os.IsNotExist(err) {
-			// Другая ошибка при проверке существования файла
-			if cfg.Debug {
-				log.Printf("Ошибка проверки существования обложки %s для книги ID %d: %v", coverFilePath, bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Файл обложки отсутствует, пытаемся его извлечь
-		// ИСПОЛЬЗУЕМ АБСОЛЮТНЫЙ ПУТЬ ИЗ БД НАПРЯМУЮ
-		filePath := fileURL.String
-
-		// Проверяем существование исходного файла книги
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			if cfg.Debug {
-				log.Printf("Исходный файл книги не найден, пропускаю обложку для книги ID %d: %s", bookID, filePath)
-			}
-			skippedNoFileCount++
-			continue
-		} else if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка проверки исходного файла книги %s для книги ID %d: %v", filePath, bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Вызываем ExtractCover из cover.go
-		// ExtractCover сама проверит, существует ли обложка, и если нет - попытается извлечь
-		coverURL, err := ExtractCover(filePath, fileType.String, bookID, fileHash.String)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка извлечения обложки для книги ID %d (файл: %s): %v", bookID, filePath, err)
-			}
-			errorCount++
-			continue
-		}
-
-		if coverURL != "" {
-			if cfg.Debug {
-				log.Printf("Обложка успешно сгенерирована для книги ID %d: %s", bookID, coverURL)
-			}
-			generatedCount++
-		} else {
-			// ExtractCover вернула пустую строку, это означает, что обложка не была найдена/извлечена
-			// Это не ошибка, просто нет обложки в файле книги
-			if cfg.Debug {
-				log.Printf("Обложка не найдена в файле книги ID %d: %s", bookID, filePath)
-			}
-		}
-	}
-
-	// Проверяем ошибки после итерации
-	if err = rows.Err(); err != nil {
-		return fmt.Errorf("ошибка итерации по результатам запроса: %w", err)
-	}
-
-	log.Printf("Генерация недостающих обложек завершена.")
-	log.Printf("  Обработано записей: %d", processedCount)
-	log.Printf("  Сгенерировано обложек: %d", generatedCount)
-	log.Printf("  Пропущено (обложка уже существует): %d", skippedExistsCount)
-	log.Printf("  Пропущено (нет file_hash): %d", skippedNoHashCount)
-	log.Printf("  Пропущено (нет файла или file_url/file_type): %d", skippedNoFileCount)
-	log.Printf("  Ошибок: %d", errorCount)
-
-	return nil
-}
-
-// GenerateMissingAnnotations создает недостающие файлы аннотаций для всех книг в БД
-func GenerateMissingAnnotations() error {
-	cfg := config.GetConfig()
-	if db == nil {
-		return fmt.Errorf("база данных не инициализирована")
-	}
-	// ВСЕГДА определяем каталог notes относительно rootPath (каталога запуска)
-	// игнорируя books_dir для веб-совместимости
-	var notesDir string
-	if rootPath != "" {
-		notesDir = filepath.Join(rootPath, "notes")
-	} else {
-		notesDir = "./notes"
-	}
-
-	// Проверяем существование каталога notes
-	if _, err := os.Stat(notesDir); os.IsNotExist(err) {
-		// Если каталога нет, создаем его
-		if err := os.MkdirAll(notesDir, 0755); err != nil {
-			return fmt.Errorf("ошибка создания каталога notes: %w", err)
-		}
-		log.Printf("Каталог notes создан: %s", notesDir)
-	} else if err != nil {
-		return fmt.Errorf("ошибка проверки каталога notes: %w", err)
-	}
-
-	if cfg.Debug {
-		log.Println("Начинаю генерацию недостающих аннотаций...")
-	}
-
-	// Получаем все книги из БД, у которых есть file_hash и file_url
-	// file_hash необходим для формирования имени файла аннотации и её поиска
-	// file_url необходим для доступа к исходному файлу книги
-	rows, err := db.Query(`
-		SELECT id, file_url, file_type, file_hash 
-		FROM books 
-		WHERE file_hash IS NOT NULL AND file_hash != '' AND file_url IS NOT NULL AND file_url != ''
-	`)
-	if err != nil {
-		return fmt.Errorf("ошибка получения списка книг из БД: %w", err)
-	}
-	defer rows.Close()
-
-	processedCount := 0
-	generatedCount := 0
-	skippedNoHashCount := 0
-	skippedNoFileCount := 0
-	skippedExistsCount := 0 // Новые счетчики
-	errorCount := 0
-
-	for rows.Next() {
-		processedCount++
-		var bookID int
-		var fileURL, fileType, fileHash sql.NullString
-
-		err := rows.Scan(&bookID, &fileURL, &fileType, &fileHash)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка сканирования строки книги (ID: %d): %v", bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Проверяем, есть ли file_hash
-		if !fileHash.Valid || fileHash.String == "" {
-			skippedNoHashCount++
-			continue
-		}
-
-		// Проверяем, есть ли file_url
-		if !fileURL.Valid || fileURL.String == "" {
-			skippedNoFileCount++
-			continue
-		}
-
-		// Проверяем, есть ли file_type (желательно, но не критично для аннотаций)
-		if !fileType.Valid || fileType.String == "" {
-			// Можно продолжить и без типа, пытаясь определить по расширению позже
-			// Но для простоты пропустим. Можно убрать это условие.
-			// skippedNoFileCount++
-			// continue
-			// Пока оставим, логика extractMetadata может справиться.
-		}
-
-		// Формируем ожидаемое имя файла аннотации
-		noteFileName := fileHash.String + ".txt"
-		noteFilePath := filepath.Join(notesDir, noteFileName)
-
-		// Проверяем, существует ли файл аннотации
-		if _, err := os.Stat(noteFilePath); err == nil {
-			// Файл аннотации уже существует
-			skippedExistsCount++
-			continue
-		} else if !os.IsNotExist(err) {
-			// Другая ошибка при проверке существования файла
-			if cfg.Debug {
-				log.Printf("Ошибка проверки существования аннотации %s для книги ID %d: %v", noteFilePath, bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Файл аннотации отсутствует, пытаемся его извлечь
-		// ИСПОЛЬЗУЕМ АБСОЛЮТНЫЙ ПУТЬ ИЗ БД НАПРЯМУЙ
-		filePath := fileURL.String
-
-		// Проверяем существование исходного файла книги
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			if cfg.Debug {
-				log.Printf("Исходный файл книги не найден, пропускаю аннотацию для книги ID %d: %s", bookID, filePath)
-			}
-			skippedNoFileCount++
-			continue
-		} else if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка проверки исходного файла книги %s для книги ID %d: %v", filePath, bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Получаем информацию о файле для extractMetadata
-		fileInfo, err := os.Stat(filePath)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка получения информации о файле %s для книги ID %d: %v", filePath, bookID, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Извлекаем метаданные, включая аннотацию, используя существующую логику
-		// extractMetadata возвращает много полей, но нам нужна только аннотация (и fileHash для saveAnnotationToFile)
-		// Поля: fileType, author, title, annotation, isbn, year, publisher, series, series_number, err
-		_, _, _, annotation, _, _, _, _, _, err := extractMetadata(filePath, fileInfo)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка извлечения метаданных (включая аннотацию) для книги ID %d (файл: %s): %v", bookID, filePath, err)
-			}
-			// Это не критично, аннотация может отсутствовать
-			// Просто сохраним пустую аннотацию или пропустим
-			annotation = "" // Будет создан пустой файл или файл не будет создан
-		}
-
-		// Сохраняем аннотацию в файл, используя существующую функцию
-		// saveAnnotationToFile(bookID int, annotation string, fileHash string)
-		// bookID используется только для логов внутри функции, можно передать 0 или реальный ID
-		err = saveAnnotationToFile(bookID, annotation, fileHash.String)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка сохранения аннотации для книги ID %d (хеш: %s): %v", bookID, fileHash.String, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Проверим, была ли аннотация не пустой и файл создан
-		if annotation != "" {
-			if _, err := os.Stat(noteFilePath); err == nil {
-				if cfg.Debug {
-					log.Printf("Аннотация успешно сгенерирована для книги ID %d: %s", bookID, noteFileName)
-				}
-				generatedCount++
-			} else {
-				// saveAnnotationToFile не создает файл, если аннотация пустая
-				if cfg.Debug {
-					log.Printf("Аннотация для книги ID %d оказалась пустой, файл не создан", bookID)
-				}
-				// Это нормально, не считаем за ошибку
-				// Можем залогировать, если аннотация была, но файл не создался по другой причине
-			}
-		} else {
-			if cfg.Debug {
-				log.Printf("Аннотация для книги ID %d отсутствует в файле", bookID)
-			}
-			// Это нормально
-		}
-	}
-
-	// Проверяем ошибки после итерации
-	if err = rows.Err(); err != nil {
-		return fmt.Errorf("ошибка итерации по результатам запроса: %w", err)
-	}
-
-	log.Printf("Генерация недостающих аннотаций завершена.")
-	log.Printf("  Обработано записей: %d", processedCount)
-	log.Printf("  Сгенерировано аннотаций (файлов создано): %d", generatedCount)
-	log.Printf("  Пропущено (аннотация уже существует): %d", skippedExistsCount)
-	log.Printf("  Пропущено (нет file_hash): %d", skippedNoHashCount)
-	log.Printf("  Пропущено (нет файла или file_url): %d", skippedNoFileCount)
-	log.Printf("  Ошибок: %d", errorCount)
-
-	return nil
-}
-
-// RenameBooksAccordingToConfig переименовывает книги согласно настройкам конфигурации
-func RenameBooksAccordingToConfig() error {
-	cfg := config.GetConfig()
-
-	if cfg.Debug {
-		log.Println("Начинаем переименование книг по конфигурации")
-	}
-
-	if db == nil {
-		return fmt.Errorf("база данных не инициализирована")
-	}
-
-	if cfg == nil {
-		if cfg.Debug {
-			log.Println("Конфигурация не установлена, пропускаю переименование")
-		}
-		return nil
-	}
-
-	renameMode := cfg.GetRenameBook()
-	if renameMode == "no" {
-		log.Println("Режим переименования 'no', пропускаю переименование")
-		return nil
-	}
-
-	// Определяем каталог books
-	booksDir := cfg.GetBooksDirAbs(rootPath)
-	if cfg.Debug {
-		log.Printf("Каталог books: %s", booksDir)
-	}
-
-	// Сначала получаем все книги в слайс, чтобы закрыть rows сразу
-	type bookInfo struct {
-		id       int
-		fileURL  string
-		title    string
-		fileType string
-		fileHash string
-		authors  string
-	}
-
-	var books []bookInfo
-
-	// Получаем все книги из БД с авторами
-	rows, err := db.Query(`
-        SELECT b.id, b.file_url, b.title, b.file_type, b.file_hash, 
-               GROUP_CONCAT(a.full_name, ', ') as authors
-        FROM books b
-        LEFT JOIN book_authors ba ON b.id = ba.book_id
-        LEFT JOIN authors a ON ba.author_id = a.id
-        WHERE b.file_url IS NOT NULL AND b.file_url != ''
-        GROUP BY b.id, b.file_url, b.title, b.file_type, b.file_hash
-    `)
-	if err != nil {
-		return fmt.Errorf("ошибка получения списка книг: %w", err)
-	}
-
-	for rows.Next() {
-		var id int
-		var fileURL, title, fileType, fileHash, authors sql.NullString
-
-		if err := rows.Scan(&id, &fileURL, &title, &fileType, &fileHash, &authors); err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка сканирования строки: %v", err)
-			}
-			continue
-		}
-
-		// Проверяем обязательные поля
-		if !fileURL.Valid || fileURL.String == "" {
-			continue
-		}
-
-		books = append(books, bookInfo{
-			id:       id,
-			fileURL:  fileURL.String,
-			title:    getValueOrDefault(title),
-			fileType: getValueOrDefault(fileType),
-			fileHash: getValueOrDefault(fileHash),
-			authors:  getValueOrDefault(authors),
-		})
-	}
-
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return fmt.Errorf("ошибка итерации по результатам: %w", err)
-	}
-	rows.Close()
-
-	// Теперь обрабатываем книги
-	renamedCount := 0
-	errorCount := 0
-	skippedCount := 0
-
-	for _, book := range books {
-		// Для полных путей используем fileURL напрямую
-		filePath := book.fileURL
-
-		// Проверяем, находится ли файл в каталоге books
-		// Преобразуем пути для корректного сравнения
-		absFilePath, err := filepath.Abs(filePath)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка получения абсолютного пути для %s: %v", filePath, err)
-			}
-			skippedCount++
-			continue
-		}
-
-		absBooksDir, err := filepath.Abs(booksDir)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка получения абсолютного пути для каталога books %s: %v", booksDir, err)
-			}
-			skippedCount++
-			continue
-		}
-
-		// Проверяем, находится ли файл в каталоге books или его подкаталогах
-		relPath, err := filepath.Rel(absBooksDir, absFilePath)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Файл %s не находится в каталоге books, пропускаю: %v", filePath, err)
-			}
-			skippedCount++
-			continue
-		}
-
-		// Проверяем, что относительный путь не начинается с ".." (это означало бы, что файл вне каталога books)
-		if strings.HasPrefix(relPath, "..") {
-			if cfg.Debug {
-				log.Printf("Файл %s не находится в каталоге books, пропускаю", filePath)
-			}
-			skippedCount++
-			continue
-		}
-
-		// Проверяем, существует ли файл
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			if cfg.Debug {
-				log.Printf("Файл не найден: %s (ID: %d)", filePath, book.id)
-			}
-			skippedCount++
-			continue
-		}
-
-		// Проверяем, нужно ли переименовывать (только для режима autit)
-		if renameMode == "autit" {
-			// Генерируем ожидаемое имя файла
-			expectedPath := generateExpectedFileName(filePath, book.authors, book.title, book.fileType, book.fileHash)
-
-			// Если имя уже правильное, пропускаем
-			if expectedPath == filePath {
-				skippedCount++
-				continue
-			}
-		}
-
-		// Переименовываем файл согласно конфигурации
-		newPath, err := renameBookFile(filePath, book.authors, book.title, book.fileType, book.fileHash)
-		if err != nil {
-			if cfg.Debug {
-				log.Printf("Ошибка переименования файла %s: %v", filePath, err)
-			}
-			errorCount++
-			continue
-		}
-
-		// Если путь изменился, обновляем БД
-		if newPath != filePath {
-			// Обновляем БД с новым абсолютным путем
-			_, err = db.Exec("UPDATE books SET file_url = ? WHERE id = ?", newPath, book.id)
-			if err != nil {
-				if cfg.Debug {
-					log.Printf("Ошибка обновления пути в БД для книги ID %d: %v", book.id, err)
-				}
-				errorCount++
-				continue
-			}
-			renamedCount++
-			log.Printf("Книга ID %d переименована: %s -> %s", book.id, filePath, newPath)
-		} else {
-			skippedCount++
-		}
-	}
-
-	log.Printf("Переименование завершено. Переименовано: %d, Пропущено: %d, Ошибок: %d",
-		renamedCount, skippedCount, errorCount)
-	return nil
+	// Возвращаем хеш в виде строки
+	return fmt.Sprintf("%016x", h.Sum64()), nil
 }
 
 // Вспомогательная функция для получения значения из sql.NullString
@@ -1798,68 +724,257 @@ func getValueOrDefault(nullString sql.NullString) string {
 	return ""
 }
 
-// generateExpectedFileName генерирует ожидаемое имя файла без фактического переименования
-func generateExpectedFileName(originalPath, authorName, title, fileType, fileHash string) string {
-	if cfg == nil {
-		return originalPath
+// FillMissingLowercaseFields заполняет недостающие lower-поля для книг и авторов.
+// Используется во время ревизии для обработки записей, добавленных до миграции.
+func FillMissingLowercaseFields() error {
+	cfg := config.GetConfig()
+	if db == nil {
+		return fmt.Errorf("база данных не инициализирована")
 	}
 
-	renameMode := cfg.GetRenameBook()
-	if renameMode == "no" {
-		return originalPath
+	if cfg.Debug {
+		log.Println("FillMissingLowercaseFields: Начало заполнения недостающих lower-полей...")
 	}
 
-	// Исправленное определение расширения файла
-	var ext string
-	lowerOriginalPath := strings.ToLower(originalPath)
-	if strings.HasSuffix(lowerOriginalPath, ".fb2.zip") {
-		ext = ".fb2.zip"
-	} else {
-		ext = filepath.Ext(originalPath)
+	// --- Обновляем книги ---
+	if cfg.Debug {
+		log.Println("FillMissingLowercaseFields: Обновляю недостающие lower-поля для книг...")
 	}
 
-	dir := filepath.Dir(originalPath)
-	var newName string
+	const bookBatchSize = 1000
+	updatedBooks := 0
+	totalBatches := 0
 
-	switch renameMode {
-	case "autit":
-		var sanitizedAuthor string
+	for {
+		totalBatches++
 
-		// Проверяем, есть ли несколько авторов
-		if strings.Contains(authorName, ",") || strings.Contains(authorName, ";") {
-			sanitizedAuthor = "Коллектив_авторов"
-		} else if authorName != "" {
-			sanitizedAuthor = sanitizeFilename(filepath.Base(authorName))
-			sanitizedAuthor = strings.ReplaceAll(sanitizedAuthor, " ", "_")
-		} else {
-			sanitizedAuthor = "Неизвестный_автор"
+		// Начинаем транзакцию для пакета
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("ошибка начала транзакции для обновления книг (пакет %d): %w", totalBatches, err)
+		}
+		rollbackTx := func() {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				if cfg.Debug {
+					log.Printf("FillMissingLowercaseFields: Ошибка отката транзакции для книг (пакет %d): %v", totalBatches, rbErr)
+				}
+			} else if cfg.Debug {
+				log.Printf("FillMissingLowercaseFields: Транзакция для книг (пакет %d) отменена", totalBatches)
+			}
 		}
 
-		sanitizedTitle := ""
-		if title != "" {
-			sanitizedTitle = sanitizeFilename(filepath.Base(title))
-			sanitizedTitle = strings.ReplaceAll(sanitizedTitle, " ", "_")
-		} else {
-			// Используем имя файла если нет названия
-			baseName := filepath.Base(originalPath)
-			ext := filepath.Ext(baseName)
-			sanitizedTitle = sanitizeFilename(strings.TrimSuffix(baseName, ext))
+		// Подготавливаем запрос обновления
+		stmt, err := tx.Prepare("UPDATE books SET title_lower = ?, series_lower = ? WHERE id = ? AND (title_lower IS NULL OR title_lower = '')")
+		if err != nil {
+			rollbackTx()
+			return fmt.Errorf("ошибка подготовки запроса обновления книг (пакет %d): %w", totalBatches, err)
+		}
+		defer stmt.Close()
+
+		// Получаем пакет записей, где title_lower NULL или пустой
+		rows, err := tx.Query(`
+			SELECT id, title, series 
+			FROM books 
+			WHERE title_lower IS NULL OR title_lower = '' 
+			LIMIT ?`, bookBatchSize)
+		if err != nil {
+			rollbackTx()
+			return fmt.Errorf("ошибка запроса книг для обновления (пакет %d): %w", totalBatches, err)
 		}
 
-		newName = fmt.Sprintf("%s-%s%s", sanitizedAuthor, sanitizedTitle, ext)
-	case "hash":
-		newName = fmt.Sprintf("%s%s", fileHash, ext)
-	default:
-		return originalPath
+		idsToUpdate := make([]int, 0, bookBatchSize)
+		titlesToUpdate := make([]sql.NullString, 0, bookBatchSize)
+		seriesToUpdate := make([]sql.NullString, 0, bookBatchSize)
+
+		for rows.Next() {
+			var id int
+			var title, series sql.NullString
+			if scanErr := rows.Scan(&id, &title, &series); scanErr != nil {
+				if cfg.Debug {
+					log.Printf("FillMissingLowercaseFields: Ошибка сканирования строки книги (ID: %d): %v", id, scanErr)
+				}
+				continue // Пропускаем проблемную строку, но продолжаем
+			}
+			idsToUpdate = append(idsToUpdate, id)
+			titlesToUpdate = append(titlesToUpdate, title)
+			seriesToUpdate = append(seriesToUpdate, series)
+		}
+		rows.Close()
+
+		if len(idsToUpdate) == 0 {
+			// Нет больше записей для обновления
+			_ = tx.Rollback() // Откатываем пустую транзакцию
+			if cfg.Debug {
+				log.Println("FillMissingLowercaseFields: Больше нет книг с пустыми title_lower для обновления.")
+			}
+			break
+		}
+
+		// Выполняем обновления
+		batchUpdated := 0
+		for i, id := range idsToUpdate {
+			titleLower := ""
+			seriesLower := ""
+
+			if titlesToUpdate[i].Valid && titlesToUpdate[i].String != "" {
+				titleLower = strings.ToLower(titlesToUpdate[i].String)
+			}
+			if seriesToUpdate[i].Valid && seriesToUpdate[i].String != "" {
+				seriesLower = strings.ToLower(seriesToUpdate[i].String)
+			}
+
+			_, execErr := stmt.Exec(titleLower, seriesLower, id)
+			if execErr != nil {
+				if cfg.Debug {
+					log.Printf("FillMissingLowercaseFields: Ошибка обновления книги ID %d: %v", id, execErr)
+				}
+				// Продолжаем с другими записями в пакете
+			} else {
+				batchUpdated++
+			}
+		}
+
+		// Завершаем транзакцию
+		err = tx.Commit()
+		if err != nil {
+			rollbackTx()
+			return fmt.Errorf("ошибка коммита транзакции для обновления книг (пакет %d): %w", totalBatches, err)
+		}
+
+		updatedBooks += batchUpdated
+		if cfg.Debug {
+			log.Printf("FillMissingLowercaseFields: Пакет %d завершён. Обновлено книг: %d", totalBatches, batchUpdated)
+		}
+
+		// Если обработано меньше, чем размер пакета, значит, это был последний пакет
+		if len(idsToUpdate) < bookBatchSize {
+			break
+		}
 	}
 
-	newPath := filepath.Join(dir, newName)
-	newPath = sanitizeFilename(newPath)
+	if cfg.Debug {
+		log.Printf("FillMissingLowercaseFields: Завершено обновление книг. Всего обновлено: %d", updatedBooks)
+	}
 
-	return newPath
-}
+	// --- Обновляем авторов ---
+	if cfg.Debug {
+		log.Println("FillMissingLowercaseFields: Обновляю недостающие lower-поля для авторов...")
+	}
 
-// GetConfig возвращает текущую конфигурацию приложения
-func GetConfig() *config.Config {
-	return cfg // Возвращает глобальную переменную cfg пакета scanner
+	updatedAuthors := 0
+	totalAuthorBatches := 0
+
+	for {
+		totalAuthorBatches++
+
+		// Начинаем транзакцию для пакета
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("ошибка начала транзакции для обновления авторов (пакет %d): %w", totalAuthorBatches, err)
+		}
+		rollbackTx := func() {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				if cfg.Debug {
+					log.Printf("FillMissingLowercaseFields: Ошибка отката транзакции для авторов (пакет %d): %v", totalAuthorBatches, rbErr)
+				}
+			} else if cfg.Debug {
+				log.Printf("FillMissingLowercaseFields: Транзакция для авторов (пакет %d) отменена", totalAuthorBatches)
+			}
+		}
+
+		// Подготавливаем запрос обновления
+		stmt, err := tx.Prepare("UPDATE authors SET last_name_lower = ?, full_name_lower = ? WHERE id = ? AND (last_name_lower IS NULL OR last_name_lower = '' OR full_name_lower IS NULL OR full_name_lower = '')")
+		if err != nil {
+			rollbackTx()
+			return fmt.Errorf("ошибка подготовки запроса обновления авторов (пакет %d): %w", totalAuthorBatches, err)
+		}
+		defer stmt.Close()
+
+		// Получаем пакет записей, где last_name_lower/full_name_lower NULL или пустые
+		rows, err := tx.Query(`
+			SELECT id, last_name_lower, full_name 
+			FROM authors 
+			WHERE last_name_lower IS NULL OR last_name_lower = '' OR full_name_lower IS NULL OR full_name_lower = '' 
+			LIMIT ?`, bookBatchSize)
+		if err != nil {
+			rollbackTx()
+			return fmt.Errorf("ошибка запроса авторов для обновления (пакет %d): %w", totalAuthorBatches, err)
+		}
+
+		idsToUpdate := make([]int, 0, bookBatchSize)
+		lastNamesToUpdate := make([]sql.NullString, 0, bookBatchSize)
+		fullNamesToUpdate := make([]sql.NullString, 0, bookBatchSize)
+
+		for rows.Next() {
+			var id int
+			var lastName, fullName sql.NullString
+			if scanErr := rows.Scan(&id, &lastName, &fullName); scanErr != nil {
+				if cfg.Debug {
+					log.Printf("FillMissingLowercaseFields: Ошибка сканирования строки автора (ID: %d): %v", id, scanErr)
+				}
+				continue // Пропускаем проблемную строку, но продолжаем
+			}
+			idsToUpdate = append(idsToUpdate, id)
+			lastNamesToUpdate = append(lastNamesToUpdate, lastName)
+			fullNamesToUpdate = append(fullNamesToUpdate, fullName)
+		}
+		rows.Close()
+
+		if len(idsToUpdate) == 0 {
+			// Нет больше записей для обновления
+			_ = tx.Rollback() // Откатываем пустую транзакцию
+			if cfg.Debug {
+				log.Println("FillMissingLowercaseFields: Больше нет авторов с пустыми lower-полями для обновления.")
+			}
+			break
+		}
+
+		// Выполняем обновления
+		batchUpdated := 0
+		for i, id := range idsToUpdate {
+			lastNameLower := ""
+			fullNameLower := ""
+
+			if lastNamesToUpdate[i].Valid && lastNamesToUpdate[i].String != "" {
+				lastNameLower = strings.ToLower(lastNamesToUpdate[i].String)
+			}
+			if fullNamesToUpdate[i].Valid && fullNamesToUpdate[i].String != "" {
+				fullNameLower = strings.ToLower(fullNamesToUpdate[i].String)
+			}
+
+			_, execErr := stmt.Exec(lastNameLower, fullNameLower, id)
+			if execErr != nil {
+				if cfg.Debug {
+					log.Printf("FillMissingLowercaseFields: Ошибка обновления автора ID %d: %v", id, execErr)
+				}
+				// Продолжаем с другими записями в пакете
+			} else {
+				batchUpdated++
+			}
+		}
+
+		// Завершаем транзакцию
+		err = tx.Commit()
+		if err != nil {
+			rollbackTx()
+			return fmt.Errorf("ошибка коммита транзакции для обновления авторов (пакет %d): %w", totalAuthorBatches, err)
+		}
+
+		updatedAuthors += batchUpdated
+		if cfg.Debug {
+			log.Printf("FillMissingLowercaseFields: Пакет авторов %d завершён. Обновлено авторов: %d", totalAuthorBatches, batchUpdated)
+		}
+
+		// Если обработано меньше, чем размер пакета, значит, это был последний пакет
+		if len(idsToUpdate) < bookBatchSize {
+			break
+		}
+	}
+
+	if cfg.Debug {
+		log.Printf("FillMissingLowercaseFields: Завершено обновление авторов. Всего обновлено: %d", updatedAuthors)
+		log.Println("FillMissingLowercaseFields: Завершено заполнение недостающих lower-полей.")
+	}
+
+	return nil
 }

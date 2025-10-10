@@ -59,7 +59,7 @@ func (w *WebInterface) ShowBookDetailHandler(wr http.ResponseWriter, r *http.Req
     	FROM authors a
     	JOIN book_authors ba ON a.id = ba.author_id
     	WHERE ba.book_id = ?
-    	ORDER BY a.last_name, a.full_name
+    	ORDER BY a.last_name_lower, a.full_name_lower
 	`, bookID)
 	if err == nil {
 		defer authorRows.Close()
@@ -112,9 +112,9 @@ func (w *WebInterface) ShowBookDetailHandler(wr http.ResponseWriter, r *http.Req
 	if fileHash.Valid {
 		b.FileHash = fileHash.String
 		// Получаем путь к обложке по хешу
-		b.CoverURL = w.getCoverURLFromFileHash(fileHash.String)
+		b.CoverURL = w.getCoverURLFromFileHash(fileHash.String, w.config)
 		// Читаем аннотацию из файла
-		b.Annotation = w.getAnnotationFromFile(b.ID, fileHash.String)
+		b.Annotation = w.getAnnotationFromFile(b.ID, fileHash.String, w.config)
 	} else {
 		b.CoverURL = ""
 	}
@@ -448,9 +448,9 @@ func (w *WebInterface) DeleteBookHandler(wr http.ResponseWriter, r *http.Request
 				}
 				// Не возвращаем ошибку, просто логируем
 			} else {
-				//				if cfg.Debug {
-				log.Printf("Deleted book file: %s", filePath)
-				//				}
+				if cfg.Debug {
+					log.Printf("Deleted book file: %s", filePath)
+				}
 			}
 		} else if os.IsNotExist(err) {
 			if cfg.Debug {

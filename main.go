@@ -143,7 +143,9 @@ func main() {
 	if nostrClient != nil && nostrClient.IsEnabled() {
 		// Запускаем менеджер подписки в отдельной горутине
 		go runNostrSubscriptionManager(ctx, nostrClient, cfg)
-		log.Println("Nostr Subscription Manager goroutine started.")
+		if cfg.Debug {
+			log.Println("Nostr Subscription Manager goroutine started.")
+		}
 
 		// Горутина для первой очистки через 1 минуту после старта запускается один раз
 		// Она не зависит от конкретного экземпляра subManager, так как CleanupOldEvents
@@ -197,7 +199,7 @@ func main() {
 	// --- Конец Graceful Shutdown ---
 
 	// Маршруты для API OPDS
-	http.HandleFunc("/", opds.IndexHandler(webInterface))
+	http.HandleFunc("/", opds.IndexHandler(webInterface, cfg))
 	http.HandleFunc("/feed", opds.ShowOPDSCatalogHandler)
 	http.HandleFunc("/books", bookHandler.BooksHandler)
 	http.HandleFunc("/books/", bookHandler.BooksHandler)
@@ -330,7 +332,9 @@ func runNostrSubscriptionManager(ctx context.Context, nostrClient *nostr.Client,
 		}
 
 		// --- Попытка запуска ---
-		log.Println("Nostr Subscription Manager: attempting to start...")
+		if cfg.Debug {
+			log.Println("Nostr Subscription Manager: attempting to start...")
+		}
 
 		// Создаем новый экземпляр SubscriptionManager
 		subManager = nostr.NewSubscriptionManager(nostrClient, cfg, db)
@@ -341,16 +345,22 @@ func runNostrSubscriptionManager(ctx context.Context, nostrClient *nostr.Client,
 
 		if err != nil {
 			now := time.Now()
-			log.Printf("Nostr Subscription Manager: failed to start: %v", err)
+			if cfg.Debug {
+				log.Printf("Nostr Subscription Manager: failed to start: %v", err)
+			}
 
 			// Логика сброса задержки
 			if now.Sub(lastErrorTime) > nostrReconnectResetTimeout {
 				currentReconnectDelay = initialNostrReconnectDelay
-				log.Printf("Nostr Subscription Manager: resetting reconnect delay to %v.", currentReconnectDelay)
+				if cfg.Debug {
+					log.Printf("Nostr Subscription Manager: resetting reconnect delay to %v.", currentReconnectDelay)
+				}
 			}
 			lastErrorTime = now
 
-			log.Printf("Nostr Subscription Manager: will retry in %v...", currentReconnectDelay)
+			if cfg.Debug {
+				log.Printf("Nostr Subscription Manager: will retry in %v...", currentReconnectDelay)
+			}
 			select {
 			case <-time.After(currentReconnectDelay):
 				// Увеличиваем задержку
@@ -358,21 +368,29 @@ func runNostrSubscriptionManager(ctx context.Context, nostrClient *nostr.Client,
 				if currentReconnectDelay > maxNostrReconnectDelay {
 					currentReconnectDelay = maxNostrReconnectDelay
 				}
-				log.Printf("Nostr Subscription Manager: next reconnect delay will be %v.", currentReconnectDelay)
+				if cfg.Debug {
+					log.Printf("Nostr Subscription Manager: next reconnect delay will be %v.", currentReconnectDelay)
+				}
 				continue // Повторяем цикл запуска
 			case <-ctx.Done():
-				log.Println("Nostr Subscription Manager: context cancelled while waiting to retry start.")
+				if cfg.Debug {
+					log.Println("Nostr Subscription Manager: context cancelled while waiting to retry start.")
+				}
 				return
 			}
 		}
 
 		if stopCh == nil {
-			log.Println("Nostr Subscription Manager: started, but returned nil stop channel. This might indicate it's not configured to run (e.g., client disabled). Will retry shortly.")
+			if cfg.Debug {
+				log.Println("Nostr Subscription Manager: started, but returned nil stop channel. This might indicate it's not configured to run (e.g., client disabled). Will retry shortly.")
+			}
 			// Даже если stopCh nil, всё равно ждём и пробуем перезапустить,
 			// на случай, если конфигурация изменится или клиент активируется.
 			// Это предотвращает "горячую" петлю.
 		} else {
-			log.Printf("Nostr Subscription Manager: started successfully.")
+			if cfg.Debug {
+				log.Printf("Nostr Subscription Manager: started successfully.")
+			}
 		}
 
 		// --- Ожидание завершения или сигнала перезапуска ---
@@ -410,7 +428,9 @@ func runNostrSubscriptionManager(ctx context.Context, nostrClient *nostr.Client,
 
 		// Упрощаем select с одним case
 		<-ctx.Done()
-		log.Println("Nostr Subscription Manager: received global context cancel while running.")
+		if cfg.Debug {
+			log.Println("Nostr Subscription Manager: received global context cancel while running.")
+		}
 		if stopCh != nil {
 			close(stopCh) // Сигнализируем SubscriptionManager остановиться
 			stopCh = nil

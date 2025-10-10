@@ -739,6 +739,34 @@ body {
     overflow: hidden;
 }
 
+/* Идентикон перед названием книги */
+.book-title-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.book-title-identicon {
+    width: 32px;
+    height: 32px;
+    border-radius: 2px; /* или другой стиль по желанию */
+    vertical-align: middle;
+    border: 1px solid #ddd; /* опционально: граница */
+}
+
+/* Для адаптивности на мобильных */
+@media (max-width: 768px) {
+    .book-title-header {
+        flex-wrap: wrap;
+    }
+    
+    .book-title-identicon {
+        width: 24px;
+        height: 24px;
+    }
+}
+
 /* === ФОРМЫ === */
 .auth-container {
     max-width: 400px;

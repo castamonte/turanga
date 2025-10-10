@@ -116,7 +116,7 @@ func (w *WebInterface) ShowTagHandler(wr http.ResponseWriter, r *http.Request) {
 		// Получаем обложку по хешу файла
 		if fileHash.Valid {
 			b.FileHash = fileHash.String
-			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String)
+			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String, w.config)
 		}
 
 		b.AuthorsStr = authorsStr

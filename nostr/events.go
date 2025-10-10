@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"turanga/config"
+	"turanga/scanner"
 
 	"github.com/nbd-wtf/go-nostr"
 )
@@ -128,7 +129,7 @@ func (sm *SubscriptionManager) handleIncomingBookRequest(event *nostr.Event) {
 
 	// 5. Валидация запроса
 	// Проверяем, что хотя бы одно поле заполнено
-	if requestData.Author == "" && requestData.Series == "" && requestData.Title == "" && requestData.FileHash == "" {
+	if requestData.Author == "" && requestData.Series == "" && requestData.Title == "" && requestData.FileHash == "" && requestData.ISBN == "" {
 		if cfg.Debug {
 			log.Printf("Игнорируем запрос %s: все поля пустые", event.ID)
 		}
@@ -150,9 +151,20 @@ func (sm *SubscriptionManager) handleIncomingBookRequest(event *nostr.Event) {
 		return
 	}
 
+	// Проверяем ISBN (если задан)
+	if requestData.ISBN != "" {
+		// Валидируем ISBN с помощью новой функции в scanner
+		if !scanner.IsValidISBN(requestData.ISBN) {
+			if cfg.Debug {
+				log.Printf("Игнорируем запрос %s: неверный ISBN '%s'", event.ID, requestData.ISBN)
+			}
+			return
+		}
+	}
+
 	if cfg.Debug {
-		log.Printf("Детали запроса: Автор='%s', Серия='%s', Название='%s', Хеш='%s', Источник='%s'",
-			requestData.Author, requestData.Series, requestData.Title, requestData.FileHash, requestData.Source)
+		log.Printf("Детали запроса: Автор='%s', Серия='%s', Название='%s', Хеш='%s', ISBN='%s', Источник='%s'",
+			requestData.Author, requestData.Series, requestData.Title, requestData.FileHash, requestData.ISBN, requestData.Source)
 	}
 
 	// 6. Сохраняем запрос в БД
@@ -166,9 +178,9 @@ func (sm *SubscriptionManager) handleIncomingBookRequest(event *nostr.Event) {
 	defer tx.Rollback() // Откат в случае ошибки
 
 	result, err := tx.Exec(`
-        INSERT INTO nostr_book_requests (event_id, pubkey, author, series, title, file_hash, created_at, processed, sent)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, event.ID, event.PubKey, requestData.Author, requestData.Series, requestData.Title, requestData.FileHash, event.CreatedAt, false, false)
+        INSERT INTO nostr_book_requests (event_id, pubkey, author, series, title, file_hash, isbn, created_at, processed, sent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, event.ID, event.PubKey, requestData.Author, requestData.Series, requestData.Title, requestData.FileHash, requestData.ISBN, event.CreatedAt, false, false)
 	if err != nil {
 		if cfg.Debug {
 			log.Printf("Ошибка сохранения запроса %s в БД: %v", event.ID, err)
@@ -190,20 +202,44 @@ func (sm *SubscriptionManager) handleIncomingBookRequest(event *nostr.Event) {
 	args := []interface{}{}
 
 	if requestData.Title != "" {
-		query += " AND b.title LIKE ?"
-		args = append(args, "%"+requestData.Title+"%")
+		// Используем title_lower для регистронезависимого поиска
+		if len(requestData.Title) < 5 {
+			// Если длина меньше 5, ищем точное совпадение (целиком)
+			query += " AND b.title_lower = ?"
+			args = append(args, strings.ToLower(requestData.Title))
+		} else {
+			// Если длина 5 или больше, ищем как подстроку
+			query += " AND b.title_lower LIKE ?"
+			args = append(args, "%"+strings.ToLower(requestData.Title)+"%")
+		}
 	}
 	if requestData.Series != "" {
-		query += " AND b.series LIKE ?"
-		args = append(args, "%"+requestData.Series+"%")
+		// Используем series_lower для регистронезависимого поиска
+		if len(requestData.Series) < 5 {
+			// Если длина меньше 5, ищем точное совпадение (целиком)
+			query += " AND b.series_lower = ?"
+			args = append(args, strings.ToLower(requestData.Series))
+		} else {
+			// Если длина 5 или больше, ищем как подстроку
+			query += " AND b.series_lower LIKE ?"
+			args = append(args, "%"+strings.ToLower(requestData.Series)+"%")
+		}
 	}
 	if requestData.Author != "" {
-		query += " AND EXISTS (SELECT 1 FROM book_authors ba JOIN authors a ON ba.author_id = a.id WHERE ba.book_id = b.id AND a.last_name = ?)"
-		args = append(args, requestData.Author)
+		// Используем last_name_lower или full_name_lower для регистронезависимого поиска
+		// Сначала пробуем last_name_lower
+		query += " AND EXISTS (SELECT 1 FROM book_authors ba JOIN authors a ON ba.author_id = a.id WHERE ba.book_id = b.id AND a.last_name_lower = ?)"
+		args = append(args, strings.ToLower(requestData.Author))
 	}
 	if requestData.FileHash != "" {
 		query += " AND b.file_hash = ?"
 		args = append(args, requestData.FileHash)
+	}
+	if requestData.ISBN != "" {
+		// Убираем тире и пробелы из ISBN для поиска
+		cleanedISBN := strings.ReplaceAll(strings.ReplaceAll(requestData.ISBN, "-", ""), " ", "")
+		query += " AND REPLACE(REPLACE(b.isbn, '-', ''), ' ', '') LIKE ?"
+		args = append(args, "%"+cleanedISBN+"%")
 	}
 
 	rows, err := tx.Query(query, args...)
@@ -350,10 +386,11 @@ func (sm *SubscriptionManager) handleIncomingBookResponse(event *nostr.Event) {
 		}
 	}
 
-	// Проверяем, является ли это ответом на наш запрос
+	// Проверяем, является ли это ответом на НАШ запрос (отправленный НАМИ)
 	var isOurRequest bool
 	if requestEventID != "" {
-		err := sm.db.QueryRow("SELECT EXISTS(SELECT 1 FROM nostr_book_requests WHERE event_id = ?)", requestEventID).Scan(&isOurRequest)
+		ourPubkey := sm.client.GetPublicKey()
+		err := sm.db.QueryRow("SELECT EXISTS(SELECT 1 FROM nostr_book_requests WHERE event_id = ? AND pubkey = ?)", requestEventID, ourPubkey).Scan(&isOurRequest)
 		if err != nil {
 			if cfg.Debug {
 				log.Printf("Ошибка проверки, является ли запрос %s нашим: %v", requestEventID, err)
@@ -362,14 +399,16 @@ func (sm *SubscriptionManager) handleIncomingBookResponse(event *nostr.Event) {
 	}
 
 	if isOurRequest {
-		//		if cfg.Debug {
-		log.Printf("Получен ответ на НАШ запрос %s от %s", requestEventID, event.PubKey)
-		//		}
+		if cfg.Debug {
+			log.Printf("Получен ответ на НАШ запрос %s от %s", requestEventID, event.PubKey)
+		}
 		// Здесь можно добавить специальную обработку для ответов на наши запросы
 	} else {
 		if cfg.Debug {
 			log.Printf("Получен ответ на чужой запрос %s от %s", requestEventID, event.PubKey)
 		}
+		// Если ответ не на наш запрос, можно его игнорировать или обработать по-другому
+		// В текущей логике мы всё равно сохраняем его, но можем добавить фильтрацию
 	}
 
 	// 3. Проверяем, не обрабатывали ли мы уже этот ответ (по event.ID)

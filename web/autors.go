@@ -1,3 +1,5 @@
+// web/authors.go
+
 package web
 
 import (
@@ -29,9 +31,9 @@ func (w *WebInterface) ShowAuthorHandler(wr http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Получаем информацию об авторе
-	var authorName string
-	err = w.db.QueryRow("SELECT full_name FROM authors WHERE id = ?", authorID).Scan(&authorName)
+	// Получаем информацию об авторе, включая last_name_lower
+	var authorName, authorLastNameLower string
+	err = w.db.QueryRow("SELECT full_name, last_name_lower FROM authors WHERE id = ?", authorID).Scan(&authorName, &authorLastNameLower)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(wr, "Author not found", http.StatusNotFound)
@@ -143,7 +145,7 @@ func (w *WebInterface) ShowAuthorHandler(wr http.ResponseWriter, r *http.Request
 
 		// Получаем URL обложки по хешу
 		if fileHash.Valid {
-			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String)
+			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String, w.config)
 		}
 
 		// Определяем группу (серия или "Без серии")
@@ -193,30 +195,32 @@ func (w *WebInterface) ShowAuthorHandler(wr http.ResponseWriter, r *http.Request
 
 	// Подготавливаем данные для шаблона
 	data := struct {
-		AuthorName      string
-		SeriesGroups    map[string]*SeriesGroup
-		SeriesOrder     []string
-		CurrentPage     int
-		TotalPages      int
-		StartPage       int
-		EndPage         int
-		PageNumbers     []int
-		PrevPage        int
-		NextPage        int
-		AuthorID        int
-		IsAuthenticated bool
+		AuthorName          string
+		AuthorLastNameLower string // Новое поле
+		SeriesGroups        map[string]*SeriesGroup
+		SeriesOrder         []string
+		CurrentPage         int
+		TotalPages          int
+		StartPage           int
+		EndPage             int
+		PageNumbers         []int
+		PrevPage            int
+		NextPage            int
+		AuthorID            int
+		IsAuthenticated     bool
 	}{
-		AuthorName:      authorName,
-		SeriesGroups:    seriesGroups,
-		SeriesOrder:     seriesOrder,
-		CurrentPage:     page,
-		TotalPages:      totalPages,
-		StartPage:       startPage,
-		EndPage:         endPage,
-		PrevPage:        page - 1,
-		NextPage:        page + 1,
-		AuthorID:        authorID,
-		IsAuthenticated: w.isAuthenticated(r),
+		AuthorName:          authorName,
+		AuthorLastNameLower: authorLastNameLower, // Передаем значение
+		SeriesGroups:        seriesGroups,
+		SeriesOrder:         seriesOrder,
+		CurrentPage:         page,
+		TotalPages:          totalPages,
+		StartPage:           startPage,
+		EndPage:             endPage,
+		PrevPage:            page - 1,
+		NextPage:            page + 1,
+		AuthorID:            authorID,
+		IsAuthenticated:     w.isAuthenticated(r),
 	}
 
 	// Генерируем список номеров страниц
@@ -238,6 +242,9 @@ func (w *WebInterface) ShowAuthorHandler(wr http.ResponseWriter, r *http.Request
 		log.Printf("Error executing author template for ID %d: %v", authorID, err)
 		http.Error(wr, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+	if cfg.Debug {
+		log.Printf("Отображено %d книг на странице %d из %d (Поиск: '')\n", len(seriesGroups), page, totalPages)
 	}
 }
 
@@ -268,23 +275,31 @@ func (w *WebInterface) SaveAuthorHandler(wr http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Получаем новое имя из формы
+	// Получаем новое имя и фамилию для сортировки из формы
 	newName := strings.TrimSpace(r.FormValue("name"))
+	newLastNameLowerInput := strings.TrimSpace(r.FormValue("last_name_lower")) // Получаем введенное значение
+
 	if newName == "" {
 		http.Error(wr, "Имя автора не может быть пустым", http.StatusBadRequest)
 		return
 	}
 
-	// Парсим имя на части для правильного заполнения полей
-	var lastName string
-	nameParts := strings.Fields(newName)
-	if len(nameParts) > 0 {
-		lastName = nameParts[len(nameParts)-1] // Последнее слово как фамилия
+	// Определяем значение last_name_lower для сохранения в БД
+	var lastNameLowerToSave string
+	if newLastNameLowerInput != "" {
+		// Если пользователь ввел значение, используем его (в нижнем регистре)
+		lastNameLowerToSave = strings.ToLower(newLastNameLowerInput)
 	} else {
-		lastName = newName
+		// Если пользователь не ввел значение, вычисляем его из full_name
+		nameParts := strings.Fields(newName)
+		if len(nameParts) > 0 {
+			lastNameLowerToSave = strings.ToLower(nameParts[len(nameParts)-1])
+		} else {
+			lastNameLowerToSave = strings.ToLower(newName)
+		}
 	}
 
-	// Проверяем, существует ли уже автор с таким именем
+	// Проверяем, существует ли уже автор с таким именем (full_name)
 	var existingAuthorID int
 	err = w.db.QueryRow("SELECT id FROM authors WHERE full_name = ?", newName).Scan(&existingAuthorID)
 
@@ -309,11 +324,17 @@ func (w *WebInterface) SaveAuthorHandler(wr http.ResponseWriter, r *http.Request
 				http.Error(wr, "Ошибка базы данных", http.StatusInternalServerError)
 				return
 			}
+			// Откатываем транзакцию в случае ошибки, если Commit не будет вызван
+			defer func() {
+				if err != nil {
+					tx.Rollback()
+				}
+			}()
 
 			// Переносим связи книг от старого автора к новому
 			_, err = tx.Exec("UPDATE book_authors SET author_id = ? WHERE author_id = ?", existingAuthorID, authorID)
 			if err != nil {
-				tx.Rollback()
+				// defer позаботится об откате
 				log.Printf("Ошибка обновления связей книг: %v", err)
 				http.Error(wr, "Ошибка обновления связей книг", http.StatusInternalServerError)
 				return
@@ -322,7 +343,7 @@ func (w *WebInterface) SaveAuthorHandler(wr http.ResponseWriter, r *http.Request
 			// Удаляем старого автора
 			_, err = tx.Exec("DELETE FROM authors WHERE id = ?", authorID)
 			if err != nil {
-				tx.Rollback()
+				// defer позаботится об откате
 				log.Printf("Ошибка удаления старого автора: %v", err)
 				http.Error(wr, "Ошибка удаления старого автора", http.StatusInternalServerError)
 				return
@@ -341,18 +362,22 @@ func (w *WebInterface) SaveAuthorHandler(wr http.ResponseWriter, r *http.Request
 
 		} else {
 			// Это тот же автор - просто обновляем данные
-			_, err = w.db.Exec("UPDATE authors SET last_name = ?, full_name = ? WHERE id = ?", lastName, newName, authorID)
+			// Обновляем также lower-поля
+			_, err = w.db.Exec("UPDATE authors SET full_name = ?, last_name_lower = ?, full_name_lower = ? WHERE id = ?",
+				newName, lastNameLowerToSave, strings.ToLower(newName), authorID)
 			if err != nil {
-				log.Printf("Database error updating author (ID: %d, lastName: %s, fullName: %s): %v", authorID, lastName, newName, err)
+				log.Printf("Database error updating author (ID: %d, fullName: %s): %v", authorID, newName, err)
 				http.Error(wr, "Ошибка сохранения изменений: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
 	} else {
 		// Автор не существует - обновляем текущего автора
-		_, err = w.db.Exec("UPDATE authors SET last_name = ?, full_name = ? WHERE id = ?", lastName, newName, authorID)
+		// Обновляем также lower-поля
+		_, err = w.db.Exec("UPDATE authors SET full_name = ?, last_name_lower = ?, full_name_lower = ? WHERE id = ?",
+			newName, lastNameLowerToSave, strings.ToLower(newName), authorID)
 		if err != nil {
-			log.Printf("Database error updating author (ID: %d, lastName: %s, fullName: %s): %v", authorID, lastName, newName, err)
+			log.Printf("Database error updating author (ID: %d, fullName: %s): %v", authorID, newName, err)
 			http.Error(wr, "Ошибка сохранения изменений: "+err.Error(), http.StatusInternalServerError)
 			return
 		}

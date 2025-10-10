@@ -1,0 +1,102 @@
+$ tree
+.
+├── apps
+│   ├── migrate
+│   │   └── main.go
+│   ├── nibbler
+│   │   └── main.go
+│   └── smelloscope
+│       └── main.go
+├── books
+│   └── ...
+├── config
+│   └── config.go
+├── covers
+│   └── ...
+├── db.go
+├── go.mod
+├── go.sum
+├── LICENSE
+├── main.go
+├── models
+│   └── models.go
+├── nostr
+│   ├── blacklist.go
+│   ├── events.go
+│   ├── nostr.go
+│   ├── response.go
+│   └── subscriber.go
+├── notes
+│   └── ...
+├── opds
+│   ├── authors.go
+│   ├── base_handler.go
+│   ├── books.go
+│   ├── catalog.go
+│   ├── interfaces.go
+│   ├── series.go
+│   ├── tags.go
+│   └── utils.go
+├── scanner
+│   ├── aux.go
+│   ├── cover.go
+│   ├── djvu.go
+│   ├── epub.go
+│   ├── fb2.go
+│   ├── generate.go
+│   ├── pdf.go
+│   └── scanner.go
+├── turanga
+├── turanga.conf
+├── turanga.db
+└── web
+    ├── auth.go
+    ├── autors.go
+    ├── book_detail.go
+    ├── book_edit.go
+    ├── catalog.go
+    ├── identicon.go
+    ├── ipfs.go
+    ├── request.go
+    ├── series.go
+    ├── static
+    │   ├── all.min.css
+    │   ├── author-scripts.js
+    │   ├── book-detail-scripts.js
+    │   ├── bootstrap.bundle.min.js
+    │   ├── bootstrap.min.css
+    │   ├── favicon.ico
+    │   ├── opds-icons
+    │   │   ├── authors.png
+    │   │   ├── books.png
+    │   │   ├── leela.png
+    │   │   ├── recent.png
+    │   │   ├── series.png
+    │   │   └── tags.png
+    │   ├── request-scripts.js
+    │   ├── scripts.js
+    │   ├── series-scripts.js
+    │   ├── sky.gif
+    │   ├── smsc.png
+    │   ├── style.css
+    │   ├── theme-switcher.js
+    │   ├── turanga.png
+    │   └── webfonts
+    │       ├── fa-brands-400.woff2
+    │       ├── fa-regular-400.woff2
+    │       ├── fa-solid-900.woff2
+    │       └── fa-v4compatibility.woff2
+    ├── tags.go
+    ├── templates
+    │   ├── auth.html
+    │   ├── author.html
+    │   ├── book_detail.html
+    │   ├── catalog.html
+    │   ├── request.html
+    │   ├── series.html
+    │   ├── tag.html
+    │   └── upload.html
+    ├── upload.go
+    ├── utils.go
+    └── web.go
+

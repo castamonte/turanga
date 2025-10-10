@@ -252,7 +252,9 @@ func (w *WebInterface) handleBookUpload(wr http.ResponseWriter, r *http.Request)
 
 	// Возвращаем результат
 	if errorCount == 0 {
-		log.Printf("All %d files uploaded successfully", successCount)
+		if cfg.Debug {
+			log.Printf("All %d files uploaded successfully", successCount)
+		}
 		w.writeJSONResponse(wr, map[string]interface{}{
 			"success": true,
 			"message": fmt.Sprintf("Successfully uploaded %d book(s)", successCount),

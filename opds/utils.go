@@ -317,7 +317,7 @@ func SortBooksByTitle(booksMap map[int]*models.Book) []*models.Book {
 	}
 
 	sort.Slice(books, func(i, j int) bool {
-		return books[i].Title < books[j].Title
+		return strings.ToLower(books[i].Title) < strings.ToLower(books[j].Title)
 	})
 
 	return books
@@ -352,7 +352,7 @@ func GetBooksByIDs(db *sql.DB, bookIDs []int) (map[int]*models.Book, error) {
         WHERE b.id IN (%s)
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
-        ORDER BY b.title
+        ORDER BY b.title_lower
     `, placeholders)
 
 	args := ConvertToInterfaceSlice(bookIDs)
@@ -415,7 +415,7 @@ func GetBooksByIDs(db *sql.DB, bookIDs []int) (map[int]*models.Book, error) {
             FROM book_authors ba
             JOIN authors a ON ba.author_id = a.id
             WHERE ba.book_id IN (%s)
-            ORDER BY ba.book_id, a.full_name
+            ORDER BY ba.book_id, a.full_name_lower
         `, placeholders)
 
 		authorArgs := ConvertToInterfaceSlice(bookIDs)
@@ -509,7 +509,7 @@ func GetBooksWithAuthors(db *sql.DB, query string, args ...interface{}) (map[int
             FROM book_authors ba
             JOIN authors a ON ba.author_id = a.id
             WHERE ba.book_id IN (%s)
-            ORDER BY ba.book_id, a.full_name
+            ORDER BY ba.book_id, a.full_name_lower
         `, placeholders)
 
 		authorArgs := ConvertToInterfaceSlice(bookIDs)
@@ -543,58 +543,48 @@ func GetBooksByLetter(db *sql.DB, letter string, field string) (map[int]*models.
 	var query string
 	var args []interface{}
 
+	// Используем lower-версию буквы для поиска
+	lowerLetter := strings.ToLower(letter)
+
 	// Определяем условие для буквы
-	switch strings.ToUpper(letter) {
-	case "А", "Б", "В", "Г", "Д", "Е", "Ж", "З", "И", "Й", "К", "Л", "М",
-		"Н", "О", "П", "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Ъ", "Ы", "Ь", "Э", "Ю", "Я":
+	switch lowerLetter {
+	case "а", "б", "в", "г", "д", "е", "ж", "з", "и", "й", "к", "л", "м",
+		"н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я":
 		// Русские буквы
-		if strings.ToUpper(letter) == "Ё" {
+		if lowerLetter == "ё" {
 			query = `
                 SELECT b.id as book_id, b.title, b.series, b.series_number, b.published_at,
                        b.isbn, b.year, b.publisher, b.file_url, b.file_type, b.file_hash
                 FROM books b
-                WHERE (SUBSTR(b.title, 1, 1) = 'Ё' OR SUBSTR(b.title, 1, 1) = 'Е')
+                WHERE (SUBSTR(b.title_lower, 1, 1) = 'ё' OR SUBSTR(b.title_lower, 1, 1) = 'е')
                   AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
                   AND (b.over18 IS NULL OR b.over18 = 0)
-                ORDER BY b.title
+                ORDER BY b.title_lower
             `
 		} else {
 			query = `
                 SELECT b.id as book_id, b.title, b.series, b.series_number, b.published_at,
                        b.isbn, b.year, b.publisher, b.file_url, b.file_type, b.file_hash
                 FROM books b
-                WHERE SUBSTR(b.title, 1, 1) = ?
+                WHERE SUBSTR(b.title_lower, 1, 1) = ?
                   AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
                   AND (b.over18 IS NULL OR b.over18 = 0)
-                ORDER BY b.title
+                ORDER BY b.title_lower
             `
-			args = append(args, letter)
+			args = append(args, lowerLetter)
 		}
-	case "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-		"N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z":
-		// Английские буквы
-		query = `
-            SELECT b.id as book_id, b.title, b.series, b.series_number, b.published_at,
-                   b.isbn, b.year, b.publisher, b.file_url, b.file_type, b.file_hash
-            FROM books b
-            WHERE UPPER(SUBSTR(b.title, 1, 1)) = ?
-              AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
-              AND (b.over18 IS NULL OR b.over18 = 0)
-            ORDER BY b.title
-        `
-		args = append(args, strings.ToUpper(letter))
 	default:
-		// Другие символы
+		// Английские буквы и другие символы
 		query = `
             SELECT b.id as book_id, b.title, b.series, b.series_number, b.published_at,
                    b.isbn, b.year, b.publisher, b.file_url, b.file_type, b.file_hash
             FROM books b
-            WHERE UPPER(SUBSTR(b.title, 1, 1)) = UPPER(?)
+            WHERE SUBSTR(b.title_lower, 1, 1) = ?
               AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
               AND (b.over18 IS NULL OR b.over18 = 0)
-            ORDER BY b.title
+            ORDER BY b.title_lower
         `
-		args = append(args, letter)
+		args = append(args, lowerLetter)
 	}
 
 	return GetBooksWithAuthors(db, query, args...)

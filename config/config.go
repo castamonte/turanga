@@ -43,9 +43,9 @@ type Config struct {
 	RemoveFromIPFSOnDelete bool   `ini:"remove_from_ipfs_on_delete"`
 	PaginationThreshold    int    `ini:"pagination_threshold"`
 	NostrPrivateKey        string `ini:"nostr_private_key"`
-	NostrRelays            string `ini:"nostr_relays"` // Список релеев, разделенных запятыми
+	NostrRelays            string `ini:"nostr_relays"`
 	BlacklistFile          string `ini:"blacklist_file"`
-	MaxRequestsPerDay      int    `ini:"max_requests_per_day"` // Максимальное количество запросов от одного пользователя в сутки
+	MaxRequestsPerDay      int    `ini:"max_requests_per_day"`
 }
 
 // DefaultConfig возвращает конфигурацию по умолчанию
@@ -65,7 +65,7 @@ func DefaultConfig() *Config {
 		NostrPrivateKey:        "",
 		NostrRelays:            "wss://relay.damus.io,wss://relay.primal.net",
 		BlacklistFile:          "blacklist.txt",
-		MaxRequestsPerDay:      10, // По умолчанию 10 запросов в сутки
+		MaxRequestsPerDay:      10,
 	}
 }
 
@@ -135,11 +135,13 @@ func LoadConfig(configPath string) (*Config, error) {
 // Validate проверяет корректность конфигурации
 func (c *Config) Validate() error {
 	// Логирование состояния debug режима
-	if c.Debug {
-		log.Println("Включен режим отладки (debug=true)")
-	} else {
-		log.Println("Режим отладки выключен (debug=false)")
-	}
+	/*
+		if c.Debug {
+			log.Println("Включен режим отладки (debug=true)")
+		} else {
+			log.Println("Режим отладки выключен (debug=false)")
+		}
+	*/
 
 	// Проверяем порт
 	if c.Port <= 0 || c.Port > 65535 {
@@ -170,7 +172,7 @@ func (c *Config) Validate() error {
 		c.CatalogTitle = "Turanga - Каталог книг" // Устанавливаем значение по умолчанию
 	}
 
-	// Проверяем IPFSAPIAddress (может быть пустым, если IPFS не используется)
+	// Проверяем LocalIPFSAPI (может быть пустым, если IPFS не используется)
 	// Но если задан, проверяем формат (простейшая проверка)
 	if c.LocalIPFSAPI != "" {
 		// Можно добавить более строгую проверку формата адреса
@@ -181,7 +183,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Проверяем IPFSGatewayAddress (может быть пустым)
+	// Проверяем LocalIPFSGateway (может быть пустым)
 	if c.LocalIPFSGateway != "" {
 		// Простейшая проверка, что это похоже на URL
 		if !strings.HasPrefix(c.LocalIPFSGateway, "http://") && !strings.HasPrefix(c.LocalIPFSGateway, "https://") {
@@ -194,7 +196,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Проверяем IPFSGateway (новый параметр)
+	// Проверяем IPFSGateway
 	if c.IPFSGateway != "" {
 		// Простейшая проверка, что это похоже на URL
 		if !strings.HasPrefix(c.IPFSGateway, "http://") && !strings.HasPrefix(c.IPFSGateway, "https://") {
@@ -207,8 +209,6 @@ func (c *Config) Validate() error {
 		// Если не задан, используем значение по умолчанию
 		c.IPFSGateway = "https://dweb.link"
 	}
-
-	// RemoveFromIPFSOnDelete - булево значение, ошибок быть не может
 
 	// Проверяем PaginationThreshold
 	if c.PaginationThreshold <= 0 {
@@ -369,7 +369,7 @@ func (c *Config) SaveConfig(configPath string) error {
 // Метод для получения клиента IPFS shell
 func (c *Config) GetIPFSShell() (*shell.Shell, error) {
 	if c.LocalIPFSAPI == "" {
-		return nil, fmt.Errorf("IPFS API address is not set")
+		return nil, fmt.Errorf("Local IPFS API address is not set")
 	}
 	return shell.NewShell(c.LocalIPFSAPI), nil
 }

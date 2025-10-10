@@ -59,11 +59,11 @@ type SearchFeed struct {
 }
 
 // IndexHandler обрабатывает корневой маршрут "/"
-func IndexHandler(webInterface *web.WebInterface) http.HandlerFunc {
+func IndexHandler(webInterface *web.WebInterface, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Для HTML запросов показываем веб-интерфейс
 		if strings.Contains(r.Header.Get("Accept"), "text/html") && r.URL.Path == "/" {
-			webInterface.ShowWebInterface(w, r)
+			webInterface.ShowWebInterface(w, r, cfg)
 			return
 		}
 		// Для OPDS запросов показываем каталог

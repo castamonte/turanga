@@ -43,7 +43,7 @@ func NewWebInterface(database *sql.DB, cfg *config.Config, nc *nostr.Client, roo
 		db:          database,
 		config:      cfg,
 		NostrClient: nc,
-		appTitle:    "v0.1",
+		appTitle:    "v0.2",
 		rootPath:    rootPath,
 	}
 }
@@ -95,7 +95,7 @@ func (w *WebInterface) loadTemplates() (*template.Template, error) {
 }
 
 // getAnnotationFromFile для чтения аннотации из файла
-func (w *WebInterface) getAnnotationFromFile(bookID int, fileHash string) string {
+func (w *WebInterface) getAnnotationFromFile(bookID int, fileHash string, cfg *config.Config) string {
 	// ВСЕГДА ищем аннотации в каталоге 'notes' рядом с исполняемым файлом
 	var notesDir string
 	if w.rootPath != "" {
@@ -112,7 +112,9 @@ func (w *WebInterface) getAnnotationFromFile(bookID int, fileHash string) string
 	content, err := os.ReadFile(noteFilePath)
 	if err != nil {
 		// Файл не найден или ошибка чтения
-		log.Printf("Аннотация не найдена или ошибка чтения %s: %v", noteFilePath, err) // Можно добавить лог для отладки
+		if cfg.Debug {
+			log.Printf("Аннотация не найдена или ошибка чтения %s: %v", noteFilePath, err)
+		}
 		return ""
 	}
 
@@ -120,7 +122,7 @@ func (w *WebInterface) getAnnotationFromFile(bookID int, fileHash string) string
 }
 
 // getCoverURLFromFileHash для получения пути к обложке
-func (w *WebInterface) getCoverURLFromFileHash(fileHash string) string {
+func (w *WebInterface) getCoverURLFromFileHash(fileHash string, cfg *config.Config) string {
 	if fileHash == "" {
 		return ""
 	}
@@ -141,7 +143,9 @@ func (w *WebInterface) getCoverURLFromFileHash(fileHash string) string {
 		return ""
 	} else if err != nil {
 		// Другая ошибка доступа
-		log.Printf("Ошибка проверки каталога обложек %s: %v", coversDir, err)
+		if cfg.Debug {
+			log.Printf("Ошибка проверки каталога обложек %s: %v", coversDir, err)
+		}
 		return ""
 	}
 
@@ -191,7 +195,7 @@ func (w *WebInterface) RequestBookViaNostrHandler(wr http.ResponseWriter, r *htt
 	defer cancel()
 
 	// Публикуем событие запроса через Nostr клиент
-	err := w.NostrClient.PublishBookRequestEvent(ctx, author, series, title, fileHash)
+	err := w.NostrClient.PublishBookRequestEvent(ctx, author, series, title, fileHash, "")
 	if err != nil {
 		log.Printf("Ошибка публикации запроса книги через Nostr: %v", err)
 		http.Error(wr, "Ошибка отправки запроса в сеть Nostr: "+err.Error(), http.StatusInternalServerError)
@@ -373,13 +377,13 @@ func (w *WebInterface) GetDB() *sql.DB {
 
 // GetCoverURLFromFileHash публичная обертка для приватного метода
 func (w *WebInterface) GetCoverURLFromFileHash(fileHash string) string {
-	return w.getCoverURLFromFileHash(fileHash)
+	return w.getCoverURLFromFileHash(fileHash, w.config)
 }
 
 // GetAnnotationFromFile публичная обертка для приватного метода
 // Используем bookID int64, как в приватном методе
 func (w *WebInterface) GetAnnotationFromFile(bookID int, fileHash string) string {
-	return w.getAnnotationFromFile(bookID, fileHash)
+	return w.getAnnotationFromFile(bookID, fileHash, w.config)
 }
 
 // InvalidateCoverCache очищает кэш обложек

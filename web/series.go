@@ -120,7 +120,7 @@ func (w *WebInterface) ShowSeriesHandler(wr http.ResponseWriter, r *http.Request
 
 		// Получаем URL обложки по хешу
 		if fileHash.Valid {
-			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String)
+			b.CoverURL = w.getCoverURLFromFileHash(fileHash.String, w.config)
 		}
 
 		books = append(books, b)
@@ -241,8 +241,8 @@ func (w *WebInterface) SaveSeriesHandler(wr http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Обновляем название серии во всех книгах
-	_, err = w.db.Exec("UPDATE books SET series = ? WHERE series = ?", newName, oldSeriesName)
+	// Обновляем название серии во всех книгах, а также lower-поле
+	_, err = w.db.Exec("UPDATE books SET series = ?, series_lower = ? WHERE series = ?", newName, strings.ToLower(newName), oldSeriesName)
 	if err != nil {
 		log.Printf("Database error updating series name from '%s' to '%s': %v", oldSeriesName, newName, err)
 		http.Error(wr, "Ошибка сохранения изменений", http.StatusInternalServerError)

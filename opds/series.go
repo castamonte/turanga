@@ -67,28 +67,28 @@ func (sh *SeriesHandler) SeriesLettersHandler(w http.ResponseWriter, r *http.Req
 	query := `
         SELECT DISTINCT 
             CASE 
-                WHEN UPPER(SUBSTR(b.series, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(b.series, 1, 1))
-                WHEN SUBSTR(b.series, 1, 1) BETWEEN 'А' AND 'Я' THEN SUBSTR(b.series, 1, 1)
-                WHEN SUBSTR(b.series, 1, 1) = 'Ё' THEN 'Ё'
-                ELSE UPPER(SUBSTR(b.series, 1, 1))
+                WHEN SUBSTR(b.series_lower, 1, 1) BETWEEN 'a' AND 'z' THEN SUBSTR(b.series_lower, 1, 1)
+                WHEN SUBSTR(b.series_lower, 1, 1) BETWEEN 'а' AND 'я' THEN SUBSTR(b.series_lower, 1, 1)
+                WHEN SUBSTR(b.series_lower, 1, 1) = 'ё' THEN 'ё'
+                ELSE SUBSTR(b.series_lower, 1, 1)
             END as first_letter, 
             COUNT(DISTINCT b.series) as series_count
         FROM books b
-        WHERE b.series != '' AND b.series IS NOT NULL 
+        WHERE b.series_lower != '' AND b.series_lower IS NOT NULL 
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
         GROUP BY 
             CASE 
-                WHEN UPPER(SUBSTR(b.series, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(b.series, 1, 1))
-                WHEN SUBSTR(b.series, 1, 1) BETWEEN 'А' AND 'Я' THEN SUBSTR(b.series, 1, 1)
-                WHEN SUBSTR(b.series, 1, 1) = 'Ё' THEN 'Ё'
-                ELSE UPPER(SUBSTR(b.series, 1, 1))
+                WHEN SUBSTR(b.series_lower, 1, 1) BETWEEN 'a' AND 'z' THEN SUBSTR(b.series_lower, 1, 1)
+                WHEN SUBSTR(b.series_lower, 1, 1) BETWEEN 'а' AND 'я' THEN SUBSTR(b.series_lower, 1, 1)
+                WHEN SUBSTR(b.series_lower, 1, 1) = 'ё' THEN 'ё'
+                ELSE SUBSTR(b.series_lower, 1, 1)
             END
         ORDER BY 
             CASE 
-                WHEN first_letter BETWEEN 'A' AND 'Z' THEN 1
-                WHEN first_letter BETWEEN 'А' AND 'Я' THEN 2
-                WHEN first_letter = 'Ё' THEN 3
+                WHEN first_letter BETWEEN 'a' AND 'z' THEN 1
+                WHEN first_letter BETWEEN 'а' AND 'я' THEN 2
+                WHEN first_letter = 'ё' THEN 3
                 ELSE 4
             END,
             first_letter
@@ -175,45 +175,46 @@ func (sh *SeriesHandler) getSeriesByLetter(letter string) ([]*SeriesInfo, error)
 	var seriesRows *sql.Rows
 	var err error
 
-	upperLetter := strings.ToUpper(letter)
+	// Используем lower-версию буквы для поиска
+	lowerLetter := strings.ToLower(letter)
 
-	switch upperLetter {
-	case "А", "Б", "В", "Г", "Д", "Е", "Ж", "З", "И", "Й", "К", "Л", "М",
-		"Н", "О", "П", "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Ъ", "Ы", "Ь", "Э", "Ю", "Я":
-		if upperLetter == "Ё" {
+	switch lowerLetter {
+	case "а", "б", "в", "г", "д", "е", "ж", "з", "и", "й", "к", "л", "м",
+		"н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я":
+		if lowerLetter == "ё" {
 			seriesRows, err = sh.db.Query(`
                 SELECT b.series, COUNT(*) as book_count 
                 FROM books b 
-                WHERE b.series != '' AND b.series IS NOT NULL 
-                  AND (SUBSTR(b.series, 1, 1) = 'Ё' OR SUBSTR(b.series, 1, 1) = 'Е')
+                WHERE b.series_lower != '' AND b.series_lower IS NOT NULL 
+                  AND (SUBSTR(b.series_lower, 1, 1) = 'ё' OR SUBSTR(b.series_lower, 1, 1) = 'е')
                   AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
                   AND (b.over18 IS NULL OR b.over18 = 0)
                 GROUP BY b.series 
-                ORDER BY b.series
+                ORDER BY b.series_lower
             `)
 		} else {
 			seriesRows, err = sh.db.Query(`
                 SELECT b.series, COUNT(*) as book_count 
                 FROM books b 
-                WHERE b.series != '' AND b.series IS NOT NULL 
-                  AND SUBSTR(b.series, 1, 1) = ?
+                WHERE b.series_lower != '' AND b.series_lower IS NOT NULL 
+                  AND SUBSTR(b.series_lower, 1, 1) = ?
                   AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
                   AND (b.over18 IS NULL OR b.over18 = 0)
                 GROUP BY b.series 
-                ORDER BY b.series
-            `, letter)
+                ORDER BY b.series_lower
+            `, lowerLetter)
 		}
 	default:
 		seriesRows, err = sh.db.Query(`
             SELECT b.series, COUNT(*) as book_count 
             FROM books b 
-            WHERE b.series != '' AND b.series IS NOT NULL 
-              AND UPPER(SUBSTR(b.series, 1, 1)) = UPPER(?)
+            WHERE b.series_lower != '' AND b.series_lower IS NOT NULL 
+              AND SUBSTR(b.series_lower, 1, 1) = ?
               AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
               AND (b.over18 IS NULL OR b.over18 = 0)
             GROUP BY b.series 
-            ORDER BY b.series
-        `, letter)
+            ORDER BY b.series_lower
+        `, lowerLetter)
 	}
 
 	if err != nil {
@@ -244,11 +245,11 @@ func (sh *SeriesHandler) getAllSeries() ([]*SeriesInfo, error) {
 	seriesRows, err := sh.db.Query(`
         SELECT b.series, COUNT(*) as book_count 
         FROM books b 
-        WHERE b.series != '' AND b.series IS NOT NULL 
+        WHERE b.series_lower != '' AND b.series_lower IS NOT NULL 
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
         GROUP BY b.series 
-        ORDER BY b.series
+        ORDER BY b.series_lower
     `)
 	if err != nil {
 		return nil, err
@@ -276,12 +277,14 @@ func (sh *SeriesHandler) getAllSeries() ([]*SeriesInfo, error) {
 // getBooksBySeries получает книги серии с авторами
 func (sh *SeriesHandler) getBooksBySeries(seriesName string) (map[int]*models.Book, error) {
 	cfg := config.GetConfig()
+	// Используем lower-версию имени серии для поиска
+	lowerSeriesName := strings.ToLower(seriesName)
 	query := `
         SELECT DISTINCT b.id as book_id, b.title, b.series, b.series_number, b.published_at,
                b.isbn, b.year, b.publisher,
                b.file_url, b.file_type, b.file_hash
         FROM books b
-        WHERE b.series = ?
+        WHERE b.series_lower = ?
           AND b.file_type IN ('epub', 'fb2', 'fb2.zip')
           AND (b.over18 IS NULL OR b.over18 = 0)
         ORDER BY 
@@ -290,10 +293,10 @@ func (sh *SeriesHandler) getBooksBySeries(seriesName string) (map[int]*models.Bo
                 ELSE 0
             END,
             b.series_number,
-            b.title
+            b.title_lower
     `
 
-	bookRows, err := sh.db.Query(query, seriesName)
+	bookRows, err := sh.db.Query(query, lowerSeriesName)
 	if err != nil {
 		return nil, err
 	}
