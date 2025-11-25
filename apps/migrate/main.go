@@ -514,6 +514,37 @@ func MigrateToLowercaseFields(dbPath string) error {
 	}
 	// --- КОНЕЦ БЛОКА 4 ---
 
-	log.Println("ℹ️ Миграция в lower-поля завершена")
+	// --- БЛОК 5: Добавление недостающих столбцов в другие таблицы (например, nostr_book_requests) ---
+	log.Println("Начинаю проверку/добавление недостающих столбцов в другие таблицы...")
+
+	// Проверяем и добавляем столбец 'isbn' в таблицу 'nostr_book_requests'
+	hasIsbnColumn, err := columnExists(db, "nostr_book_requests", "isbn")
+	if err != nil {
+		// Это не критично, если проверка не удалась, просто логируем
+		log.Printf("Предупреждение: ошибка проверки существования колонки 'isbn' в таблице 'nostr_book_requests': %v", err)
+		hasIsbnColumn = false // Предполагаем, что её нет или мы не можем проверить
+	}
+
+	if !hasIsbnColumn {
+		log.Println("Добавляю колонку 'isbn' в таблицу 'nostr_book_requests'...")
+		_, err = db.Exec("ALTER TABLE nostr_book_requests ADD COLUMN isbn TEXT")
+		if err != nil {
+			// Проверим, не потому ли ошибка, что колонка уже существует (двойная проверка)
+			if checkIfExists, checkErr := columnExists(db, "nostr_book_requests", "isbn"); checkErr == nil && checkIfExists {
+				log.Println("Колонка 'isbn' уже существует в таблице 'nostr_book_requests'.")
+			} else {
+				// Важно: не возвращаем ошибку, если не удалось добавить столбец, чтобы не сломать основную миграцию
+				// Просто логируем проблему
+				log.Printf("Предупреждение: ошибка добавления колонки 'isbn' в таблицу 'nostr_book_requests': %v", err)
+			}
+		} else {
+			log.Println("Колонка 'isbn' успешно добавлена в таблицу 'nostr_book_requests'.")
+		}
+	} else {
+		log.Println("Колонка 'isbn' в таблице 'nostr_book_requests' уже существует. Пропускаю добавление.")
+	}
+	// --- КОНЕЦ БЛОКА 5 ---
+
+	log.Println("ℹ️ Миграция завершена")
 	return nil
 }
