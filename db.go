@@ -93,6 +93,7 @@ func initDB(rootPath string) {
             series TEXT,                    -- Серия из запроса
             title TEXT,                     -- Название из запроса
             file_hash TEXT,                 -- Хеш файла из запроса
+			isbn TEXT,                      -- ISDN из запроса
             created_at INTEGER NOT NULL,    -- Время создания события (UNIX timestamp)
             processed BOOLEAN NOT NULL DEFAULT FALSE, -- Флаг обработки
             sent BOOLEAN NOT NULL DEFAULT FALSE,      -- Флаг отправки ответа
